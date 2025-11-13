@@ -1,0 +1,27 @@
+plugins {
+    alias(libs.plugins.spring.boot)
+    id "java"
+}
+
+dependencies {
+    // Align all Spring deps with the Spring Boot BOM
+    implementation(platform(libs.spring.boot.bom))
+
+    implementation(libs.spring.boot.starter.web)
+    implementation(libs.spring.boot.starter.graphql)
+    implementation(libs.spring.boot.starter.actuator)
+    implementation(libs.spring.boot.starter.data.jpa)
+
+    implementation(libs.flyway.core)
+    implementation(libs.flyway.pg)
+    runtimeOnly(libs.postgresql)
+
+    implementation(libs.resilience4j.boot3)
+
+    compileOnly(libs.lombok)
+    annotationProcessor(libs.lombok)
+
+    testImplementation(libs.spring.boot.starter.test)
+}
+
+tasks.named("bootJar") { archiveBaseName = "gateway" }

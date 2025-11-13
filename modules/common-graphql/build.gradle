@@ -1,0 +1,7 @@
+plugins { id "java" }
+
+dependencies {
+    // Only resources (SDL). Keep empty to avoid pulling code deps.
+}
+
+tasks.named("jar") { archiveBaseName = "common-graphql" }

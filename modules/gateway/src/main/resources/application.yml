@@ -1,0 +1,45 @@
+spring:
+  application:
+    name: gateway
+  config:
+    import: "optional:file:.env[.properties]"
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5449/app}
+    username: ${DB_USER:app}
+    password: ${DB_PASS:app}
+    hikari:
+      maximum-pool-size: 10
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate.jdbc.time_zone: UTC
+      hibernate.default_schema: gateway
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    schemas: gateway
+    create-schemas: true
+    baseline-on-migrate: true
+
+  graphql:
+    path: /graphql
+    graphiql:
+      enabled: true
+
+management:
+  endpoints:
+    web.exposure.include: health,info,metrics,prometheus
+  endpoint.health.probes.enabled: true
+
+server:
+  port: ${PORT:8080}
+
+services:
+  order:
+    base-url: ${ORDER_BASE_URL:http://localhost:8081}
+  inventory:
+    base-url: ${INVENTORY_BASE_URL:http://localhost:8082}
+  payment:
+    base-url: ${PAYMENT_BASE_URL:http://localhost:8083}

@@ -1,0 +1,18 @@
+plugins {
+    alias(libs.plugins.spring.boot) apply false
+}
+
+allprojects {
+    group = "com.github.dimitryivaniuta"
+    version = "0.1.0-SNAPSHOT"
+}
+
+subprojects {
+    apply plugin: "java"
+
+    java {
+        toolchain { languageVersion = JavaLanguageVersion.of(libs.versions.java.get().toInteger()) }
+    }
+
+    tasks.withType(Test).configureEach { useJUnitPlatform() }
+}
