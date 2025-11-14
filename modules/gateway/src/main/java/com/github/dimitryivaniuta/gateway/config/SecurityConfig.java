@@ -12,6 +12,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -82,30 +83,32 @@ public class SecurityConfig {
         http.httpBasic(basic -> basic.disable());
 
         http.authorizeHttpRequests(registry -> {
-            // Ops endpoints are always open so Kubernetes / infra can probe health.
-            registry
-                    .requestMatchers("/actuator/health/**", "/actuator/info")
-                    .permitAll();
+                    // Ops endpoints are always open so Kubernetes / infra can probe health.
+                    registry
+                            .requestMatchers("/actuator/health/**", "/actuator/info")
+                            .permitAll();
 
-            // Developer tooling – keep open in local/dev; consider restricting in production.
-            registry
-                    .requestMatchers("/graphiql", "/graphiql/**", "/vendor/graphiql/**")
-                    .permitAll();
+                    // Developer tooling – keep open in local/dev; consider restricting in production.
+                    registry
+                            .requestMatchers("/graphiql", "/graphiql/**", "/vendor/graphiql/**")
+                            .permitAll();
 
-            // GraphQL endpoint + everything else based on the feature flag.
-            if (requireAuth) {
-                // When you plug in JWT/API-key/etc., these will really require authentication.
-                registry
-                        .requestMatchers(HttpMethod.POST, "/graphql").authenticated()
-                        .requestMatchers(HttpMethod.GET, "/graphql").denyAll() // no GET /graphql
-                        .anyRequest().authenticated();
-            } else {
-                // Development / local mode: all endpoints (except GET /graphql) are open.
-                registry
-                        .requestMatchers("/graphql").permitAll()
-                        .anyRequest().permitAll();
-            }
-        });
+                    // GraphQL endpoint + everything else based on the feature flag.
+                    if (requireAuth) {
+                        // When you plug in JWT/API-key/etc., these will really require authentication.
+                        registry
+                                .requestMatchers(HttpMethod.POST, "/graphql").authenticated()
+                                .requestMatchers(HttpMethod.GET, "/graphql").denyAll() // no GET /graphql
+                                .anyRequest().authenticated();
+                    } else {
+                        // Development / local mode: all endpoints (except GET /graphql) are open.
+                        registry
+                                .requestMatchers("/graphql").permitAll()
+                                .anyRequest().permitAll();
+                    }
+                })
+                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(apiKeyFilter, UsernamePasswordAuthenticationFilter.class);
 
         // HSTS/HTTPS enforcement can be configured at ingress level; leave to infra for now.
         return http.build();
