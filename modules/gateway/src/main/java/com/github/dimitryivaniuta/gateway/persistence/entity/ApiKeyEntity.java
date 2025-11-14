@@ -35,7 +35,7 @@ import java.time.OffsetDateTime;
 @Table(
         name = "api_key",
         indexes = {
-                @Index(name = "idx_api_key_key_unique", columnList = "key", unique = true)
+                @Index(name = "idx_api_key_key_unique", columnList = "\"key\"", unique = true)
         }
 )
 @Getter
@@ -43,12 +43,8 @@ import java.time.OffsetDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@ToString
-public class ApiKeyEntity {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+@ToString(callSuper = true)
+public class ApiKeyEntity extends AbstractUuidEntity {
 
     @Column(name = "\"key\"", nullable = false, unique = true, length = 128)
     private String key;

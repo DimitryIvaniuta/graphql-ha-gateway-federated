@@ -1,39 +1,36 @@
 package com.github.dimitryivaniuta.gateway.persistence.service;
 
+import com.github.dimitryivaniuta.gateway.config.properties.SecurityProperties;
+import com.github.dimitryivaniuta.gateway.persistence.entity.UserEntity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtException;
+import org.springframework.security.oauth2.jwt.*;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
- * JWT-focused security service that wraps {@link JwtDecoder} and encapsulates
- * how authorities are extracted from JWT claims.
- *
- * <p>Responsibilities:
+ * JWT service responsible for:
  * <ul>
- *   <li>Decode and validate a JWT via {@link JwtDecoder}.</li>
- *   <li>Translate claims (e.g. {@code scope}, {@code scp}) into Spring Security authorities.</li>
- *   <li>Produce an authenticated {@link JwtAuthenticationToken} ready to be placed in the SecurityContext.</li>
+ *   <li>Decoding/validating incoming JWTs (resource server behavior).</li>
+ *   <li>Issuing new JWTs after a successful login (SSO token issuing).</li>
  * </ul>
  *
- * <p>Configuration example (application.yml):
+ * <p>Configuration (example):
  * <pre>
- * spring:
- *   security:
- *     oauth2:
- *       resourceserver:
- *         jwt:
- *           jwk-set-uri: https://issuer.example.com/.well-known/jwks.json
+ * security:
+ *   jwt:
+ *     issuer: graphql-gateway
+ *     ttl-seconds: 3600
+ *     # secret is configured in SecurityConfig, see JwtEncoder/JwtDecoder beans
  * </pre>
- * This lets Spring Boot auto-configure a {@link JwtDecoder} bean.</p>
  */
 @Service
 public class JwtService {
@@ -41,9 +38,15 @@ public class JwtService {
     private static final Logger log = LoggerFactory.getLogger(JwtService.class);
 
     private final JwtDecoder jwtDecoder;
+    private final JwtEncoder jwtEncoder;
+    private final SecurityProperties securityProperties;
 
-    public JwtService(JwtDecoder jwtDecoder) {
+    public JwtService(JwtDecoder jwtDecoder,
+                      JwtEncoder jwtEncoder,
+                      SecurityProperties securityProperties) {
         this.jwtDecoder = jwtDecoder;
+        this.jwtEncoder = jwtEncoder;
+        this.securityProperties = securityProperties;
     }
 
     /**
@@ -60,6 +63,48 @@ public class JwtService {
 
         log.debug("Decoded JWT for subject='{}', authorities={}", jwt.getSubject(), authorities);
         return authentication;
+    }
+
+    /**
+     * Issue a new JWT for a successfully authenticated user.
+     *
+     * <p>Payload contains:
+     * <ul>
+     *   <li>{@code sub} – username</li>
+     *   <li>{@code tenant} – tenant identifier</li>
+     *   <li>{@code scope} – space-delimited roles (ROLE_*)</li>
+     * </ul>
+     */
+    public String issueToken(UserEntity user) {
+        Instant now = Instant.now();
+        Instant expiresAt = now.plusSeconds(securityProperties.jwt().ttlSeconds());
+
+        List<String> roleList = Arrays.stream(user.getRoles().split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
+
+        String scopeClaim = roleList.stream()
+                .map(role -> role.startsWith("ROLE_") ? role.substring("ROLE_".length()) : role)
+                .collect(Collectors.joining(" "));
+
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .issuer(securityProperties.jwt().issuer())
+                .issuedAt(now)
+                .expiresAt(expiresAt)
+                .subject(user.getUsername())
+                .claim("tenant", user.getTenantId())
+                .claim("scope", scopeClaim)
+                .build();
+
+        JwsHeader jwsHeader = JwsHeader.with(() -> "HS256").build();
+        JwtEncoderParameters params = JwtEncoderParameters.from(jwsHeader, claims);
+
+        Jwt jwt = jwtEncoder.encode(params);
+        log.debug("Issued JWT for tenant='{}', username='{}', expiresAt={}",
+                user.getTenantId(), user.getUsername(), expiresAt);
+
+        return jwt.getTokenValue();
     }
 
     /**

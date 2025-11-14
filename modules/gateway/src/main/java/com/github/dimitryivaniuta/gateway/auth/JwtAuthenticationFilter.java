@@ -1,59 +1,62 @@
 package com.github.dimitryivaniuta.gateway.auth;
 
+import com.github.dimitryivaniuta.gateway.persistence.service.JwtService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.security.authentication.AbstractAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.filter.OncePerRequestFilter;
-
 import java.io.IOException;
-import java.util.List;
 
 /**
- * A Filter to parse and validate JWT tokens in incoming HTTP requests.
- * If a valid token is present, authenticates the user and populates the SecurityContext.
- * If invalid, returns HTTP 401 and halts processing.
+ * Authentication filter for JWT-based Single Sign-On.
  *
- * <p>Workflow:
- * <ol>
- *   <li>Extract token (e.g., “Authorization: Bearer {token}”).</li>
- *   <li>Use {@link JwtService} to validate, parse principal and claims.</li>
- *   <li>If valid, build an {@link Authentication}, set context and continue chain.</li>
- *   <li>If invalid, respond HTTP 401 Unauthorized.</li>
- *   <li>If no token present, skip – other auth (API key) may apply.</li>
- * </ol>
- * </p>
+ * <p>Responsibilities:
+ * <ul>
+ *   <li>Inspect the {@code Authorization} header for a {@code Bearer &lt;token&gt;} value.</li>
+ *   <li>Delegate JWT decoding and validation to {@link JwtService}.</li>
+ *   <li>On success, populate the {@link SecurityContextHolder} with a {@link JwtAuthenticationToken}.</li>
+ *   <li>On failure, respond with HTTP 401 and do not continue the filter chain.</li>
+ * </ul>
+ *
+ * <p>Filter activation:
+ * <ul>
+ *   <li>Runs only if the request contains an {@code Authorization} header
+ *       starting with {@code "Bearer "}.</li>
+ *   <li>If the header is absent or not a Bearer token, this filter is skipped
+ *       and the request proceeds as anonymous (subject to security rules).</li>
+ * </ul>
  */
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
+
+    private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
+    private static final String AUTHORIZATION_HEADER = "Authorization";
+    private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtService jwtService;
 
     /**
-     * Constructor.
-     *
-     * @param jwtService service to validate and extract claims from JWT.
+     * @param jwtService service that handles decoding, validation and converting
+     *                   JWTs into {@link JwtAuthenticationToken}.
      */
     public JwtAuthenticationFilter(JwtService jwtService) {
         this.jwtService = jwtService;
+    }
+
+    /**
+     * Skip this filter if there is no Bearer token.
+     */
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String authHeader = request.getHeader(AUTHORIZATION_HEADER);
+        return authHeader == null || !authHeader.startsWith(BEARER_PREFIX);
     }
 
     @Override
@@ -62,58 +65,31 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     FilterChain filterChain)
             throws ServletException, IOException {
 
-        String header = request.getHeader("Authorization");
-        if (header == null || !header.startsWith("Bearer ")) {
-            // No JWT – allow other auth mechanisms
+        String authHeader = request.getHeader(AUTHORIZATION_HEADER);
+        String token = authHeader.substring(BEARER_PREFIX.length()).trim();
+
+        // Do not override an existing authenticated context (e.g. API key already set it).
+        Authentication existing = SecurityContextHolder.getContext().getAuthentication();
+        if (existing != null && existing.isAuthenticated()) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        String token = header.substring(7);
         try {
-            JwtService.JwtClaims claims = jwtService.parseAndValidate(token);
-            // Example: get username and roles from claims
-            String username = claims.username();
-            List<SimpleGrantedAuthority> authorities = claims.roles().stream()
-                    .map(SimpleGrantedAuthority::new)
-                    .toList();
+            // Delegate decoding + authority extraction to JwtService
+            JwtAuthenticationToken authentication = jwtService.authenticate(token);
 
-            Authentication authentication = new JwtAuthenticationToken(username, authorities);
             SecurityContextHolder.getContext().setAuthentication(authentication);
+
+            log.debug("JWT authentication successful for subject='{}' on {} {}",
+                    authentication.getName(), request.getMethod(), request.getRequestURI());
+
             filterChain.doFilter(request, response);
 
-        } catch (JwtAuthenticationException ex) {
-            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid or expired JWT token");
-        }
-    }
-
-    @Override
-    protected boolean shouldNotFilter(HttpServletRequest request) {
-        // Skip for actuator/health, static resources or other open endpoints
-        String path = request.getServletPath();
-        return path.startsWith("/actuator") || path.startsWith("/graphiql");
-    }
-
-    /**
-     * Inner static authentication token for JWT‐authenticated users.
-     */
-    private static class JwtAuthenticationToken extends AbstractAuthenticationToken {
-        private final String principal;
-
-        public JwtAuthenticationToken(String principal, List<SimpleGrantedAuthority> authorities) {
-            super(authorities);
-            this.principal = principal;
-            setAuthenticated(true);
-        }
-
-        @Override
-        public Object getCredentials() {
-            return null;
-        }
-
-        @Override
-        public Object getPrincipal() {
-            return principal;
+        } catch (JwtException ex) {
+            // Invalid or expired token → reject with 401
+            log.warn("Invalid JWT on {} {}: {}", request.getMethod(), request.getRequestURI(), ex.getMessage());
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         }
     }
 }

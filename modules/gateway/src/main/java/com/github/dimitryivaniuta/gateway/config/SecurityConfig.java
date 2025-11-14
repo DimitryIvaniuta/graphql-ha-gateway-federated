@@ -2,9 +2,13 @@ package com.github.dimitryivaniuta.gateway.config;
 
 import com.github.dimitryivaniuta.gateway.auth.ApiKeyAuthenticationFilter;
 import com.github.dimitryivaniuta.gateway.auth.JwtAuthenticationFilter;
+import com.github.dimitryivaniuta.gateway.config.properties.CorsProperties;
+import com.github.dimitryivaniuta.gateway.config.properties.SecurityProperties;
 import com.github.dimitryivaniuta.gateway.persistence.service.ApiKeyService;
 import com.github.dimitryivaniuta.gateway.persistence.service.JwtService;
-import org.springframework.beans.factory.annotation.Value;
+import com.nimbusds.jose.jwk.source.ImmutableSecret;
+import lombok.RequiredArgsConstructor;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -15,13 +19,20 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import java.util.Arrays;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
@@ -60,10 +71,13 @@ import java.util.List;
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
+@RequiredArgsConstructor
+@EnableConfigurationProperties({SecurityProperties.class, CorsProperties.class})
 public class SecurityConfig {
 
-    @Value("${security.require-auth:false}")
-    private boolean requireAuth;
+    private final SecurityProperties securityProperties;
+
+    private final CorsProperties corsProperties;
 
     /**
      * Main HTTP security configuration and filter chain.
@@ -98,7 +112,7 @@ public class SecurityConfig {
                     .requestMatchers("/graphiql", "/graphiql/**", "/vendor/graphiql/**")
                     .permitAll();
 
-            if (requireAuth) {
+            if (securityProperties.requireAuth()) {
                 // Lockdown mode – all non-actuator endpoints require authentication.
                 registry
                         .requestMatchers(HttpMethod.POST, "/graphql").authenticated()
@@ -128,17 +142,10 @@ public class SecurityConfig {
      * {@code cors.allowed-origins} with a comma-separated allow list.</p>
      */
     @Bean
-    public CorsConfigurationSource corsConfigurationSource(
-            @Value("${cors.allowed-origins:*}") String allowedOrigins) {
+    public CorsConfigurationSource corsConfigurationSource() {
 
         CorsConfiguration cfg = new CorsConfiguration();
-
-        List<String> origins = Arrays.stream(allowedOrigins.split(","))
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .toList();
-
-        cfg.setAllowedOrigins(origins);
+        cfg.setAllowedOrigins(corsProperties.resolvedAllowedOrigins());
         cfg.setAllowedMethods(List.of("GET", "POST", "OPTIONS"));
         cfg.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-API-Key"));
         cfg.setAllowCredentials(false);
@@ -150,6 +157,31 @@ public class SecurityConfig {
     }
 
     /**
+     * Symmetric signing key for JWTs (HS256) - JWT encoder (HS256) using security.jwt.secret..
+     *
+     * <p>Use a long, random secret in production and store it securely (e.g. Vault, Secrets Manager).</p>
+     */
+    @Bean
+    public JwtEncoder jwtEncoder() {
+        SecretKey key = new SecretKeySpec(securityProperties.jwt().secretRequired()
+                .getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+        return new NimbusJwtEncoder(new ImmutableSecret<>(key));
+    }
+
+    /**
+     * Symmetric JWT decoder (HS256) using the same secret as the encoder.
+     */
+    @Bean
+    public JwtDecoder jwtDecoder() {
+        SecretKey key = new SecretKeySpec(securityProperties.jwt().secretRequired()
+                .getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+        return NimbusJwtDecoder.withSecretKey(key)
+                .macAlgorithm(MacAlgorithm.HS256)
+                .build();
+    }
+
+    /**
+     * BCrypt encoder for user passwords (USERS table).
      * Password encoder placeholder for future username/password flows.
      * Not used by API-key/JWT flows directly.
      */
@@ -158,22 +190,15 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-    // -------------------------------------------------------------------------
-    // Filter beans (assumes you adjust constructors accordingly)
-    // -------------------------------------------------------------------------
-
     /**
      * API-key authentication filter that delegates validation to {@link ApiKeyService}.
      *
      * @param apiKeyService  service used to look up active API keys
-     * @param headerName     HTTP header used to carry the API key (e.g. X-API-Key)
      */
     @Bean
-    public ApiKeyAuthenticationFilter apiKeyAuthenticationFilter(
-            ApiKeyService apiKeyService,
-            @Value("${security.api-key-header:X-API-Key}") String headerName) {
+    public ApiKeyAuthenticationFilter apiKeyAuthenticationFilter(ApiKeyService apiKeyService) {
 
-        return new ApiKeyAuthenticationFilter(apiKeyService, headerName);
+        return new ApiKeyAuthenticationFilter(apiKeyService, securityProperties);
     }
 
     /**
@@ -184,4 +209,6 @@ public class SecurityConfig {
     public JwtAuthenticationFilter jwtAuthenticationFilter(JwtService jwtService) {
         return new JwtAuthenticationFilter(jwtService);
     }
+
+
 }

@@ -15,13 +15,12 @@ import java.util.Optional;
  *
  * <p>Responsibilities:
  * <ul>
- *   <li>Normalize and validate raw API key values from HTTP headers.</li>
- *   <li>Lookup active keys from PostgreSQL via {@link ApiKeyRepository}.</li>
- *   <li>Provide a simple high-level API for filters and resolvers to consume.</li>
+ *   <li>Normalize raw API key values coming from HTTP headers.</li>
+ *   <li>Look up active (enabled) keys from PostgreSQL via {@link ApiKeyRepository}.</li>
+ *   <li>Expose a simple API for filters/controllers to verify API keys.</li>
  * </ul>
  *
- * <p>Rate limiting / tenant resolution / metrics are intentionally kept out of this service
- * to maintain focus on authentication. They can be added in separate components.</p>
+ * <p>Rate limiting and tenant resolution are intentionally kept out of this service.</p>
  */
 @Service
 @Transactional(readOnly = true)
@@ -36,13 +35,9 @@ public class ApiKeyService {
     }
 
     /**
-     * Authenticate an API key value by checking that:
-     * <ul>
-     *   <li>It is non-null and non-blank.</li>
-     *   <li>It corresponds to an {@link ApiKeyEntity} that is {@code enabled=true}.</li>
-     * </ul>
+     * Authenticate an API key by verifying that it maps to an enabled {@link ApiKeyEntity}.
      *
-     * @param rawKey value from HTTP header (e.g. {@code X-API-Key})
+     * @param rawKey value from the HTTP header (e.g. {@code X-API-Key})
      * @return an active API key entity if authentication succeeds
      */
     public Optional<ApiKeyEntity> authenticate(String rawKey) {
@@ -54,20 +49,18 @@ public class ApiKeyService {
         Optional<ApiKeyEntity> result = apiKeyRepository.findByKeyAndEnabledIsTrue(normalized);
 
         if (result.isEmpty()) {
-            log.debug("API key authentication failed: no active key found for token '{}'", normalized);
+            log.debug("API key authentication failed: no active key for token '{}'", normalized);
         } else {
-            log.debug("API key authentication succeeded for key '{}', name='{}'",
-                    normalized, result.get().getName());
+            ApiKeyEntity entity = result.get();
+            log.debug("API key authentication succeeded for key='{}', name='{}'",
+                    normalized, entity.getName());
         }
 
         return result;
     }
 
     /**
-     * Convenience method for simple validity checks where the caller does not need the entity.
-     *
-     * @param rawKey raw API key value
-     * @return {@code true} if an active key exists for the token
+     * Convenience method when the caller only cares about validity.
      */
     public boolean isValid(String rawKey) {
         return authenticate(rawKey).isPresent();

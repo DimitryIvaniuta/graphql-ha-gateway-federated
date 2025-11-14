@@ -1,12 +1,15 @@
 package com.github.dimitryivaniuta.gateway.auth;
 
+import com.github.dimitryivaniuta.gateway.config.properties.SecurityProperties;
 import com.github.dimitryivaniuta.gateway.persistence.entity.ApiKeyEntity;
 import com.github.dimitryivaniuta.gateway.persistence.service.ApiKeyService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -14,6 +17,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * A Filter that checks for a valid API-Key header in incoming HTTP requests, authenticates the request
@@ -32,19 +36,24 @@ import java.util.List;
  * </ol>
  * </p>
  */
+@Slf4j
 public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
 
-    public static final String HEADER_API_KEY = "X-API-Key";
-
     private final ApiKeyService apiKeyService;
+    private final String headerName;
+    private final String staticKeyOrNull;
 
     /**
      * Constructor.
      *
      * @param apiKeyService service to validate API keys.
      */
-    public ApiKeyAuthenticationFilter(ApiKeyService apiKeyService) {
+    public ApiKeyAuthenticationFilter(ApiKeyService apiKeyService,
+                                      SecurityProperties securityProperties) {
         this.apiKeyService = apiKeyService;
+        SecurityProperties.ApiKey apiProps = securityProperties.apiKey();
+        this.headerName = apiProps != null ? apiProps.headerOrDefault() : "X-API-Key";
+        this.staticKeyOrNull = apiProps != null ? apiProps.staticKeyOrNull() : null;
     }
 
     @Override
@@ -53,42 +62,63 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
                                     FilterChain filterChain)
             throws ServletException, IOException {
 
-        String apiKey = request.getHeader(HEADER_API_KEY);
-        if (apiKey == null || apiKey.isBlank()) {
-            // No API key present -> skip this filter and allow other authentication mechanisms (e.g., JWT) to proceed
+        String headerValue = request.getHeader(headerName);
+
+        if (headerValue == null || headerValue.isBlank()) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        try {
-            ApiKeyEntity keyEntity = apiKeyService.validateAndFetch(apiKey);
-            if (!keyEntity.isEnabled()) {
-                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "API key disabled");
+        String token = headerValue.trim();
+
+        // 1) DB-backed API key
+        Optional<ApiKeyEntity> apiKeyOpt = apiKeyService.authenticate(token);
+
+        if (apiKeyOpt.isEmpty()) {
+            // 2) Optional static key fallback
+            if (staticKeyOrNull != null && staticKeyOrNull.equals(token)) {
+                log.debug("Authenticated using static API key for {}", request.getRequestURI());
+                authenticateAs("static-api-key");
+                filterChain.doFilter(request, response);
                 return;
             }
-            // Build authorities (e.g., role from entity)
-            List<SimpleGrantedAuthority> authorities = List.of(
-                    new SimpleGrantedAuthority(keyEntity.getRole())
-            );
-            Authentication authentication = new ApiKeyAuthenticationToken(
-                    keyEntity.getKey(),
-                    authorities
-            );
-            SecurityContextHolder.getContext().setAuthentication(authentication);
-            filterChain.doFilter(request, response);
 
-        } catch (Exception ex) {
-            // Any validation failure results in 401
-            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid or expired API key");
+            log.warn("Invalid API key from {} on {} {}", request.getRemoteAddr(),
+                    request.getMethod(), request.getRequestURI());
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            return;
         }
+
+        ApiKeyEntity apiKey = apiKeyOpt.get();
+        authenticateAs("api-key:" + apiKey.getId());
+
+        filterChain.doFilter(request, response);
+    }
+
+    private void authenticateAs(String principal) {
+        Authentication existing = SecurityContextHolder.getContext().getAuthentication();
+        if (existing != null && existing.isAuthenticated()) {
+            return;
+        }
+
+        UsernamePasswordAuthenticationToken auth =
+                new UsernamePasswordAuthenticationToken(
+                        principal,
+                        null,
+                        List.of(new SimpleGrantedAuthority("ROLE_API_CLIENT"))
+                );
+
+        // details set in filter; WebAuthenticationDetailsSource requires HttpServletRequest,
+        // so we leave it out here and set only principal/authorities.
+        SecurityContextHolder.getContext().setAuthentication(auth);
     }
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
         // Optionally skip API-key logic for certain paths (for example actuator or static)
-        String path = request.getServletPath();
-        return path.startsWith("/actuator") || path.startsWith("/graphiql");
+        return !"/graphql".equals(request.getServletPath());
     }
+
 
     /**
      * Inner static authentication token representing API key credentials.
