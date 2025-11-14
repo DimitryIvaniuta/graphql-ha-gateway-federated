@@ -1,5 +1,9 @@
 package com.github.dimitryivaniuta.gateway.config;
 
+import com.github.dimitryivaniuta.gateway.auth.ApiKeyAuthenticationFilter;
+import com.github.dimitryivaniuta.gateway.auth.JwtAuthenticationFilter;
+import com.github.dimitryivaniuta.gateway.persistence.service.ApiKeyService;
+import com.github.dimitryivaniuta.gateway.persistence.service.JwtService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,135 +25,163 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Baseline Spring Security configuration for the GraphQL gateway.
+ * Central Spring Security configuration for the gateway.
  *
- * <p>Goals:
+ * <p>Key characteristics:
  * <ul>
- *     <li>Stateless API (no HTTP session state).</li>
- *     <li>Secure-by-default; health/info and GraphiQL are explicitly allowed.</li>
- *     <li>Feature flag {@code security.require-auth} to tighten access later without
- *         touching controllers/resolvers.</li>
- * </ul>
- *
- * <p>Behavior:
- * <ul>
- *   <li>{@code security.require-auth=false} (default):
+ *   <li>Stateless (no HTTP session for security).</li>
+ *   <li>Property-driven toggle {@code security.require-auth} to switch between open dev
+ *       and locked-down mode.</li>
+ *   <li>Pluggable authentication mechanisms:
  *       <ul>
- *         <li>{@code /actuator/health/**}, {@code /actuator/info} – allowed.</li>
- *         <li>{@code /graphiql/**} – allowed (developer tooling).</li>
- *         <li>{@code /graphql} – allowed (anonymous access).</li>
- *         <li>Any other path – allowed.</li>
- *       </ul>
- *   </li>
- *   <li>{@code security.require-auth=true}:
- *       <ul>
- *         <li>{@code /actuator/health/**}, {@code /actuator/info} – still allowed.</li>
- *         <li>Everything else – requires authentication (once an auth mechanism is wired).</li>
+ *         <li>JWT tokens via {@link JwtService} and {@link JwtAuthenticationFilter}.</li>
+ *         <li>API keys via {@link ApiKeyService} and {@link ApiKeyAuthenticationFilter}.</li>
  *       </ul>
  *   </li>
  * </ul>
  *
- * <p>Note: Authentication mechanism (API key, JWT, OAuth2, etc.) is intentionally not implemented yet.
- * Turning {@code security.require-auth=true} without an auth filter will effectively block non-actuator traffic.</p>
+ * <p>High-level behavior:
+ * <ul>
+ *   <li>Always permits {@code /actuator/health/**} and {@code /actuator/info}.</li>
+ *   <li>Always permits GraphiQL resources ({@code /graphiql/**}).</li>
+ *   <li>When {@code security.require-auth=false} (default):
+ *       <ul>
+ *         <li>{@code /graphql} &gt; various APIs – all permitted (dev mode).</li>
+ *       </ul>
+ *   </li>
+ *   <li>When {@code security.require-auth=true}:
+ *       <ul>
+ *         <li>/graphql and all other non-actuator paths require authentication
+ *             (JWT and/or API key).</li>
+ *       </ul>
+ *   </li>
+ * </ul>
  */
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
 
-    /**
-     * Feature flag that allows you to flip from "open dev" to "locked down" without code changes.
-     */
     @Value("${security.require-auth:false}")
     private boolean requireAuth;
 
     /**
-     * Main HTTP security filter chain configuration.
+     * Main HTTP security configuration and filter chain.
      */
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http,
+                                                   ApiKeyAuthenticationFilter apiKeyFilter,
+                                                   JwtAuthenticationFilter jwtFilter) throws Exception {
 
-        // Stateless API; security context is not stored in HTTP sessions.
-        http.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+        // Stateless API – no HTTP session state
+        http.sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
-        // CSRF is unnecessary for stateless APIs (no browser form logins).
+        // No CSRF for stateless APIs
         http.csrf(csrf -> csrf.disable());
 
-        // Basic CORS configuration; detailed rules via corsConfigurationSource().
+        // CORS setup via corsConfigurationSource bean
         http.cors(Customizer.withDefaults());
 
-        // We do not use form login or HTTP basic for now – this is an API gateway.
+        // No form login or HTTP Basic – we rely on API keys / JWTs.
         http.formLogin(form -> form.disable());
         http.httpBasic(basic -> basic.disable());
 
+        // Authorization rules
         http.authorizeHttpRequests(registry -> {
-                    // Ops endpoints are always open so Kubernetes / infra can probe health.
-                    registry
-                            .requestMatchers("/actuator/health/**", "/actuator/info")
-                            .permitAll();
+            // Allow health + info for infra probes.
+            registry
+                    .requestMatchers("/actuator/health/**", "/actuator/info")
+                    .permitAll();
 
-                    // Developer tooling – keep open in local/dev; consider restricting in production.
-                    registry
-                            .requestMatchers("/graphiql", "/graphiql/**", "/vendor/graphiql/**")
-                            .permitAll();
+            // Developer tooling (GraphiQL). In production you may want to restrict this further.
+            registry
+                    .requestMatchers("/graphiql", "/graphiql/**", "/vendor/graphiql/**")
+                    .permitAll();
 
-                    // GraphQL endpoint + everything else based on the feature flag.
-                    if (requireAuth) {
-                        // When you plug in JWT/API-key/etc., these will really require authentication.
-                        registry
-                                .requestMatchers(HttpMethod.POST, "/graphql").authenticated()
-                                .requestMatchers(HttpMethod.GET, "/graphql").denyAll() // no GET /graphql
-                                .anyRequest().authenticated();
-                    } else {
-                        // Development / local mode: all endpoints (except GET /graphql) are open.
-                        registry
-                                .requestMatchers("/graphql").permitAll()
-                                .anyRequest().permitAll();
-                    }
-                })
-                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterBefore(apiKeyFilter, UsernamePasswordAuthenticationFilter.class);
+            if (requireAuth) {
+                // Lockdown mode – all non-actuator endpoints require authentication.
+                registry
+                        .requestMatchers(HttpMethod.POST, "/graphql").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/graphql").denyAll()
+                        .anyRequest().authenticated();
+            } else {
+                // Dev mode – allow everything except GET /graphql.
+                registry
+                        .requestMatchers("/graphql").permitAll()
+                        .anyRequest().permitAll();
+            }
+        });
 
-        // HSTS/HTTPS enforcement can be configured at ingress level; leave to infra for now.
+        // Plug filters into the chain:
+        // 1) JWT from Authorization: Bearer <token>
+        // 2) API key from X-API-Key (or configured header)
+        http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+        http.addFilterBefore(apiKeyFilter, UsernamePasswordAuthenticationFilter.class);
+
         return http.build();
     }
 
     /**
-     * CORS policy for browser clients (e.g. GraphiQL in SPA or API explorer).
+     * CORS configuration used by the SecurityFilterChain.
      *
-     * <p>By default this allows any origin. For production, override {@code cors.allowed-origins}
-     * with a comma-separated allow-list, e.g. {@code https://app.example.com,https://admin.example.com}.</p>
+     * <p>By default, allows all origins (dev-friendly). In production override
+     * {@code cors.allowed-origins} with a comma-separated allow list.</p>
      */
     @Bean
     public CorsConfigurationSource corsConfigurationSource(
             @Value("${cors.allowed-origins:*}") String allowedOrigins) {
 
-        CorsConfiguration configuration = new CorsConfiguration();
+        CorsConfiguration cfg = new CorsConfiguration();
 
-        // Parse comma-separated list; "*" means "any origin".
         List<String> origins = Arrays.stream(allowedOrigins.split(","))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
                 .toList();
 
-        // For APIs without credentials, AllowedOrigins="*" is acceptable.
-        configuration.setAllowedOrigins(origins);
-        configuration.setAllowedMethods(List.of("GET", "POST", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-API-Key"));
-        configuration.setAllowCredentials(false);
-        configuration.setMaxAge(3_600L); // 1 hour
+        cfg.setAllowedOrigins(origins);
+        cfg.setAllowedMethods(List.of("GET", "POST", "OPTIONS"));
+        cfg.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-API-Key"));
+        cfg.setAllowCredentials(false);
+        cfg.setMaxAge(3_600L); // 1 hour
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
+        source.registerCorsConfiguration("/**", cfg);
         return source;
     }
 
     /**
-     * Password encoder stub, ready for future user/credential-based flows if needed.
-     * Not used yet, but required once you introduce any password-based authentication.
+     * Password encoder placeholder for future username/password flows.
+     * Not used by API-key/JWT flows directly.
      */
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
+    }
+
+    // -------------------------------------------------------------------------
+    // Filter beans (assumes you adjust constructors accordingly)
+    // -------------------------------------------------------------------------
+
+    /**
+     * API-key authentication filter that delegates validation to {@link ApiKeyService}.
+     *
+     * @param apiKeyService  service used to look up active API keys
+     * @param headerName     HTTP header used to carry the API key (e.g. X-API-Key)
+     */
+    @Bean
+    public ApiKeyAuthenticationFilter apiKeyAuthenticationFilter(
+            ApiKeyService apiKeyService,
+            @Value("${security.api-key-header:X-API-Key}") String headerName) {
+
+        return new ApiKeyAuthenticationFilter(apiKeyService, headerName);
+    }
+
+    /**
+     * JWT authentication filter that delegates decoding and authority extraction
+     * to {@link JwtService}.
+     */
+    @Bean
+    public JwtAuthenticationFilter jwtAuthenticationFilter(JwtService jwtService) {
+        return new JwtAuthenticationFilter(jwtService);
     }
 }

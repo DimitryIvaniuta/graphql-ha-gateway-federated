@@ -14,66 +14,46 @@ import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.security.authentication.AbstractAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.filter.OncePerRequestFilter;
+
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 
 /**
- * JWT-based authentication filter.
+ * A Filter to parse and validate JWT tokens in incoming HTTP requests.
+ * If a valid token is present, authenticates the user and populates the SecurityContext.
+ * If invalid, returns HTTP 401 and halts processing.
  *
- * <p>Responsibilities:
- * <ul>
- *   <li>Inspect the {@code Authorization} header for a {@code Bearer &lt;token&gt;} value.</li>
- *   <li>Use a Spring {@link JwtDecoder} to validate and parse the token.</li>
- *   <li>On success, create a {@link JwtAuthenticationToken} and store it in the {@link SecurityContextHolder}.</li>
- * </ul>
- *
- * <p>Usage:
- * <ul>
- *   <li>Configure a {@link JwtDecoder} bean (via Spring Boot's resource-server support or custom config).</li>
- *   <li>Register this filter in {@code SecurityConfig}, e.g.:
- *   <pre>
- *   http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
- *   </pre>
- *   </li>
- * </ul>
- *
- * <p>Expected JWT configuration (example via properties):
- * <pre>
- * spring:
- *   security:
- *     oauth2:
- *       resourceserver:
- *         jwt:
- *           jwk-set-uri: https://example.com/.well-known/jwks.json
- * </pre>
- * Boot will auto-create a {@link JwtDecoder} which this filter can inject.</p>
+ * <p>Workflow:
+ * <ol>
+ *   <li>Extract token (e.g., “Authorization: Bearer {token}”).</li>
+ *   <li>Use {@link JwtService} to validate, parse principal and claims.</li>
+ *   <li>If valid, build an {@link Authentication}, set context and continue chain.</li>
+ *   <li>If invalid, respond HTTP 401 Unauthorized.</li>
+ *   <li>If no token present, skip – other auth (API key) may apply.</li>
+ * </ol>
+ * </p>
  */
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
-    private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
-    private static final String BEARER_PREFIX = "Bearer ";
-
-    private final JwtDecoder jwtDecoder;
+    private final JwtService jwtService;
 
     /**
-     * @param jwtDecoder Spring Security JWT decoder; typically auto-configured by Boot.
+     * Constructor.
+     *
+     * @param jwtService service to validate and extract claims from JWT.
      */
-    public JwtAuthenticationFilter(JwtDecoder jwtDecoder) {
-        this.jwtDecoder = jwtDecoder;
-    }
-
-    /**
-     * Limit this filter to the GraphQL endpoint and only when an Authorization header is present.
-     */
-    @Override
-    protected boolean shouldNotFilter(HttpServletRequest request) {
-        String authHeader = request.getHeader("Authorization");
-        if (!"/graphql".equals(request.getServletPath())) {
-            return true;
-        }
-        return authHeader == null || !authHeader.startsWith(BEARER_PREFIX);
+    public JwtAuthenticationFilter(JwtService jwtService) {
+        this.jwtService = jwtService;
     }
 
     @Override
@@ -82,70 +62,58 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     FilterChain filterChain)
             throws ServletException, IOException {
 
-        String authHeader = request.getHeader("Authorization");
-        String token = authHeader.substring(BEARER_PREFIX.length()).trim();
-
-        try {
-            Jwt jwt = jwtDecoder.decode(token);
-
-            // Map scopes/roles from JWT claims to Spring authorities.
-            Collection<GrantedAuthority> authorities = extractAuthorities(jwt);
-
-            JwtAuthenticationToken authentication =
-                    new JwtAuthenticationToken(jwt, authorities);
-
-            SecurityContextHolder.getContext().setAuthentication(authentication);
-
-            log.debug("JWT authentication successful for subject '{}' on {} {}",
-                    jwt.getSubject(), request.getMethod(), request.getRequestURI());
-
-        } catch (JwtException ex) {
-            log.warn("Invalid JWT presented on {} {}: {}", request.getMethod(), request.getRequestURI(),
-                    ex.getMessage());
-            // Reject request early with 401; no need to proceed further.
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        String header = request.getHeader("Authorization");
+        if (header == null || !header.startsWith("Bearer ")) {
+            // No JWT – allow other auth mechanisms
+            filterChain.doFilter(request, response);
             return;
         }
 
-        filterChain.doFilter(request, response);
+        String token = header.substring(7);
+        try {
+            JwtService.JwtClaims claims = jwtService.parseAndValidate(token);
+            // Example: get username and roles from claims
+            String username = claims.username();
+            List<SimpleGrantedAuthority> authorities = claims.roles().stream()
+                    .map(SimpleGrantedAuthority::new)
+                    .toList();
+
+            Authentication authentication = new JwtAuthenticationToken(username, authorities);
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+            filterChain.doFilter(request, response);
+
+        } catch (JwtAuthenticationException ex) {
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid or expired JWT token");
+        }
+    }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        // Skip for actuator/health, static resources or other open endpoints
+        String path = request.getServletPath();
+        return path.startsWith("/actuator") || path.startsWith("/graphiql");
     }
 
     /**
-     * Extract authorities from standard JWT claims.
-     *
-     * <p>Strategy:
-     * <ul>
-     *   <li>Check {@code scope} or {@code scp} claims.</li>
-     *   <li>Support both space-delimited String and String list forms.</li>
-     *   <li>Prefix with {@code SCOPE_} to align with Spring's convention.</li>
-     * </ul>
+     * Inner static authentication token for JWT‐authenticated users.
      */
-    private Collection<GrantedAuthority> extractAuthorities(Jwt jwt) {
-        List<String> scopes = new ArrayList<>();
+    private static class JwtAuthenticationToken extends AbstractAuthenticationToken {
+        private final String principal;
 
-        // Try "scope" claim as list
-        List<String> scopeList = jwt.getClaimAsStringList("scope");
-        if (scopeList != null) {
-            scopes.addAll(scopeList);
-        } else {
-            // Try "scope" as space-delimited String
-            String scopeString = jwt.getClaimAsString("scope");
-            if (scopeString != null && !scopeString.isBlank()) {
-                scopes.addAll(List.of(scopeString.split("\\s+")));
-            }
+        public JwtAuthenticationToken(String principal, List<SimpleGrantedAuthority> authorities) {
+            super(authorities);
+            this.principal = principal;
+            setAuthenticated(true);
         }
 
-        // Fallback to "scp" (Azure AD style)
-        List<String> scpList = jwt.getClaimAsStringList("scp");
-        if (scpList != null) {
-            scopes.addAll(scpList);
+        @Override
+        public Object getCredentials() {
+            return null;
         }
 
-        // Map to Spring GrantedAuthority
-        return scopes.stream()
-                .filter(s -> s != null && !s.isBlank())
-                .map(String::trim)
-                .map(scope -> (GrantedAuthority) () -> "SCOPE_" + scope)
-                .toList();
+        @Override
+        public Object getPrincipal() {
+            return principal;
+        }
     }
 }

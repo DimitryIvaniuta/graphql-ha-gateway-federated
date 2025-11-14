@@ -1,82 +1,50 @@
 package com.github.dimitryivaniuta.gateway.auth;
 
+import com.github.dimitryivaniuta.gateway.persistence.entity.ApiKeyEntity;
+import com.github.dimitryivaniuta.gateway.persistence.service.ApiKeyService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Objects;
 
 /**
- * Simple API-key based authentication filter.
+ * A Filter that checks for a valid API-Key header in incoming HTTP requests, authenticates the request
+ * if valid, or rejects it otherwise.
  *
- * <p>Responsibilities:
- * <ul>
- *   <li>Look for an API key in the configured header (defaults to {@code X-API-Key}).</li>
- *   <li>Compare the incoming key to a static expected value from configuration.</li>
- *   <li>If the key matches and there is no existing authentication, create an authenticated
- *       {@link UsernamePasswordAuthenticationToken} with {@code ROLE_API_CLIENT}.</li>
- * </ul>
+ * <p>This filter should be registered early in the filter chain (before JwtAuthenticationFilter or UsernamePasswordAuthenticationFilter)
+ * and only applied when API-key access is allowed. It supports stateless authentication of clients identified via API keys stored in the DB.</p>
  *
- * <p>Configuration properties:
- * <pre>
- * security:
- *   api-key-header: X-API-Key        # optional, default
- *   static-api-key: my-super-secret  # optional; if empty, filter is effectively disabled
- * </pre>
- *
- * <p>Notes:
- * <ul>
- *   <li>This is intentionally simple – a real system would validate against a database
- *       or {@code ApiKeyService} to check status, rate limits, tenant, etc.</li>
- *   <li>The filter only runs for {@code /graphql} requests (see {@link #shouldNotFilter}).</li>
- * </ul>
- *
- * <p>To plug it into the chain, register it in {@code SecurityConfig} with:
- * <pre>
- * http.addFilterBefore(apiKeyAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
- * </pre>
+ * <p>Workflow:
+ * <ol>
+ *   <li>Extract header (default “X-API-Key” or configurable).</li>
+ *   <li>If present, validate via {@link ApiKeyService} (enabled, not expired, rate limit etc.).</li>
+ *   <li>If valid, build an {@link Authentication} and set it in the {@code SecurityContext}.</li>
+ *   <li>If invalid, respond HTTP 401 Unauthorized and stop filter chain.</li>
+ *   <li>If header missing, simply move on—possibly other auth (JWT) may apply.</li>
+ * </ol>
  * </p>
  */
 public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
 
-    private static final Logger log = LoggerFactory.getLogger(ApiKeyAuthenticationFilter.class);
+    public static final String HEADER_API_KEY = "X-API-Key";
 
-    private final String headerName;
-    private final String expectedApiKey;
-    private final boolean enabled;
+    private final ApiKeyService apiKeyService;
 
     /**
-     * @param headerName    HTTP header name to read the API key from (e.g. X-API-Key).
-     * @param expectedApiKey static API key configured for this gateway. If blank, filter is disabled.
+     * Constructor.
+     *
+     * @param apiKeyService service to validate API keys.
      */
-    public ApiKeyAuthenticationFilter(
-            @Value("${security.api-key-header:X-API-Key}") String headerName,
-            @Value("${security.static-api-key:}") String expectedApiKey) {
-
-        this.headerName = Objects.requireNonNull(headerName, "headerName must not be null");
-        this.expectedApiKey = expectedApiKey == null ? "" : expectedApiKey.trim();
-        this.enabled = !this.expectedApiKey.isEmpty();
-    }
-
-    /**
-     * Limit this filter to the GraphQL endpoint only (POST /graphql).
-     */
-    @Override
-    protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !"/graphql".equals(request.getServletPath());
+    public ApiKeyAuthenticationFilter(ApiKeyService apiKeyService) {
+        this.apiKeyService = apiKeyService;
     }
 
     @Override
@@ -85,45 +53,63 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
                                     FilterChain filterChain)
             throws ServletException, IOException {
 
-        // If no static API key is configured, do nothing – filter behaves as a no-op.
-        if (!enabled) {
+        String apiKey = request.getHeader(HEADER_API_KEY);
+        if (apiKey == null || apiKey.isBlank()) {
+            // No API key present -> skip this filter and allow other authentication mechanisms (e.g., JWT) to proceed
             filterChain.doFilter(request, response);
             return;
         }
 
-        String headerValue = request.getHeader(headerName);
-
-        if (headerValue == null || headerValue.isBlank()) {
-            // No API key present – just continue. Security rules will decide whether
-            // anonymous access is allowed for this route.
+        try {
+            ApiKeyEntity keyEntity = apiKeyService.validateAndFetch(apiKey);
+            if (!keyEntity.isEnabled()) {
+                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "API key disabled");
+                return;
+            }
+            // Build authorities (e.g., role from entity)
+            List<SimpleGrantedAuthority> authorities = List.of(
+                    new SimpleGrantedAuthority(keyEntity.getRole())
+            );
+            Authentication authentication = new ApiKeyAuthenticationToken(
+                    keyEntity.getKey(),
+                    authorities
+            );
+            SecurityContextHolder.getContext().setAuthentication(authentication);
             filterChain.doFilter(request, response);
-            return;
+
+        } catch (Exception ex) {
+            // Any validation failure results in 401
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid or expired API key");
+        }
+    }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
+        // Optionally skip API-key logic for certain paths (for example actuator or static)
+        String path = request.getServletPath();
+        return path.startsWith("/actuator") || path.startsWith("/graphiql");
+    }
+
+    /**
+     * Inner static authentication token representing API key credentials.
+     */
+    private static class ApiKeyAuthenticationToken extends AbstractAuthenticationToken {
+        private final String principal;
+
+        public ApiKeyAuthenticationToken(String principal, List<SimpleGrantedAuthority> authorities) {
+            super(authorities);
+            this.principal = principal;
+            setAuthenticated(true);
         }
 
-        // Compare with expected key. If mismatch, short-circuit with 401.
-        if (!expectedApiKey.equals(headerValue.trim())) {
-            log.warn("Invalid API key from {} on {} {}", request.getRemoteAddr(),
-                    request.getMethod(), request.getRequestURI());
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            return;
+        @Override
+        public Object getCredentials() {
+            return principal;
         }
 
-        // If the SecurityContext already has an authentication, do not override it.
-        Authentication existing = SecurityContextHolder.getContext().getAuthentication();
-        if (existing == null || !existing.isAuthenticated()) {
-            UsernamePasswordAuthenticationToken auth =
-                    new UsernamePasswordAuthenticationToken(
-                            "api-key-client", // principal
-                            null,             // credentials
-                            List.of(new SimpleGrantedAuthority("ROLE_API_CLIENT"))
-                    );
-
-            auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-            SecurityContextHolder.getContext().setAuthentication(auth);
-
-            log.debug("Authenticated request with API key for {}", request.getRequestURI());
+        @Override
+        public Object getPrincipal() {
+            return principal;
         }
-
-        filterChain.doFilter(request, response);
     }
 }
