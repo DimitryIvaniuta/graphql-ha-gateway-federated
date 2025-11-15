@@ -1,4 +1,4 @@
-package com.github.dimitryivaniuta.gateway.web.dto;
+package com.github.dimitryivaniuta.gateway.web.auth.dto;
 
 import java.util.List;
 

@@ -1,12 +1,12 @@
-package com.github.dimitryivaniuta.gateway.web;
+package com.github.dimitryivaniuta.gateway.web.auth;
 
 import com.github.dimitryivaniuta.gateway.config.properties.SecurityProperties;
 import com.github.dimitryivaniuta.gateway.persistence.entity.UserEntity;
 import com.github.dimitryivaniuta.gateway.persistence.service.JwtService;
 import com.github.dimitryivaniuta.gateway.persistence.service.UserService;
-import com.github.dimitryivaniuta.gateway.web.dto.CurrentUserResponse;
-import com.github.dimitryivaniuta.gateway.web.dto.LoginRequest;
-import com.github.dimitryivaniuta.gateway.web.dto.TokenResponse;
+import com.github.dimitryivaniuta.gateway.web.auth.dto.CurrentUserResponse;
+import com.github.dimitryivaniuta.gateway.web.auth.dto.LoginRequest;
+import com.github.dimitryivaniuta.gateway.web.auth.dto.TokenResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
