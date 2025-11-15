@@ -1,0 +1,42 @@
+"""
+Inventory item exposed by the gateway.
+"""
+type InventoryItem {
+    id: ID!
+    sku: String!
+    name: String!
+    description: String
+    availableQuantity: Int!
+    reservedQuantity: Int!
+    updatedAt: DateTime
+
+    """
+    Orders that contain this item.
+    Resolved via InventoryItemTypeResolver + orderBatchLoader.
+    """
+    orders: [Order!]!
+}
+
+"""
+Input for updating inventory quantities.
+"""
+input UpdateInventoryItemInput {
+    id: ID!
+    availableQuantity: Int
+    reservedQuantity: Int
+}
+
+extend type Query {
+"""
+Fetch multiple inventory items by IDs.
+"""
+inventoryItems(ids: [ID!]!): [InventoryItem!]!
+}
+
+extend type Mutation {
+"""
+Update quantities of a single inventory item.
+"""
+updateInventoryItem(input: UpdateInventoryItemInput!): InventoryItem!
+
+}

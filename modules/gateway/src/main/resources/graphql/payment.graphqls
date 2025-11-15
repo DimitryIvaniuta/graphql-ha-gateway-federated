@@ -1,0 +1,44 @@
+"""
+Payment record exposed by the gateway.
+"""
+type Payment {
+    id: ID!
+    orderId: ID!
+    status: PaymentStatus!
+    amount: Money!
+    currency: String!
+    provider: String
+    createdAt: DateTime!
+    updatedAt: DateTime
+
+    """
+    Order associated with this payment.
+    Resolved via PaymentTypeResolver + orderBatchLoader.
+    """
+    order: Order!
+}
+
+"""
+Input for capturing a payment for an order.
+"""
+input CapturePaymentInput {
+    orderId: ID!
+    amount: Money!
+    currency: String!
+    provider: String
+}
+
+extend type Query {
+"""
+Fetch multiple payments by IDs.
+"""
+payments(ids: [ID!]!): [Payment!]!
+}
+
+
+extend type Mutation {
+"""
+Capture (finalize) a payment for an order.
+"""
+capturePayment(input: CapturePaymentInput!): Payment!
+}

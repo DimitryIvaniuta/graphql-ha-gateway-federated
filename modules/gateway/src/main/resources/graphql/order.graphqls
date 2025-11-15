@@ -1,0 +1,60 @@
+"""
+Order aggregate exposed by the gateway.
+"""
+type Order {
+    id: ID!
+    externalId: String
+    status: OrderStatus!
+    customerId: ID
+    totalAmount: Money!
+    currency: String!
+    createdAt: DateTime!
+    updatedAt: DateTime
+
+    """
+    Inventory items associated with this order.
+    Resolved via OrderTypeResolver + inventoryBatchLoader.
+    """
+    inventoryItems: [InventoryItem!]!
+
+    """
+    Payments associated with this order.
+    Resolved via OrderTypeResolver + paymentBatchLoader.
+    """
+    payments: [Payment!]!
+}
+
+"""
+Input for a single line item when creating an order.
+"""
+input CreateOrderItemInput {
+    inventoryItemId: ID!
+    quantity: Int!
+    unitPrice: Money!
+    currency: String!
+}
+
+"""
+Input for creating an order.
+"""
+input CreateOrderInput {
+    clientMutationId: String
+    customerId: ID
+    items: [CreateOrderItemInput!]!
+    totalAmount: Money
+    currency: String
+}
+
+extend type Query {
+"""
+Fetch multiple orders by IDs.
+"""
+orders(ids: [ID!]!): [Order!]!
+}
+
+extend type Mutation {
+"""
+Create a new order in the order service.
+"""
+createOrder(input: CreateOrderInput!): Order!
+}

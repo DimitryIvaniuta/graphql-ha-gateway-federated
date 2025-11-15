@@ -1,0 +1,53 @@
+"""
+Root schema and shared scalars.
+"""
+schema {
+    query: Query
+    mutation: Mutation
+}
+
+"""
+Root query type – extended in domain-specific files.
+"""
+type Query {
+    _empty: String
+}
+
+"""
+Root mutation type – extended in domain-specific files.
+"""
+type Mutation {
+    _empty: String
+}
+
+"""
+ISO-8601 datetime with offset, e.g. 2025-11-14T10:15:30+00:00
+Backed by java.time.OffsetDateTime and DateTimeScalar.
+"""
+scalar DateTime
+
+"""
+Decimal monetary amount; currency is provided in a separate field.
+Backed by java.math.BigDecimal and MoneyScalar.
+"""
+scalar Money
+
+"""
+High-level order status.
+"""
+enum OrderStatus {
+    CREATED
+    CONFIRMED
+    CANCELLED
+    FULFILLED
+}
+
+"""
+High-level payment status.
+"""
+enum PaymentStatus {
+    AUTHORIZED
+    CAPTURED
+    DECLINED
+    REFUNDED
+}
