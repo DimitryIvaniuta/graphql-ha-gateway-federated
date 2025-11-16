@@ -1,6 +1,7 @@
 package com.github.dimitryivaniuta.gateway.graphql.type.input;
 
-import java.math.BigDecimal;
+import com.github.dimitryivaniuta.gateway.common.money.MoneyDto;
+
 import java.util.UUID;
 
 /**
@@ -8,8 +9,7 @@ import java.util.UUID;
  */
 public record CapturePaymentInput(
         UUID orderId,
-        BigDecimal amount,
-        String currency,
+        MoneyDto total,
         String provider
 ) {
 }

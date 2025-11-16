@@ -4,6 +4,9 @@ plugins {
 }
 
 dependencies {
+    implementation project(":modules:common-domain")
+    implementation project(":modules:common-graphql")
+    implementation("org.apache.commons:commons-compress:1.28.0")
     // Align all Spring deps with the Spring Boot BOM
     implementation(platform(libs.spring.boot.bom))
 

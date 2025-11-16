@@ -7,7 +7,7 @@ pluginManagement {
     }
 }
 
-rootProject.name = 'graphql-ha-gateway-federated-spring-java21'
+rootProject.name = 'graphql-ha-gateway-federated'
 
 // Optional but handy for type-safe project references
 enableFeaturePreview('TYPESAFE_PROJECT_ACCESSORS')
@@ -24,10 +24,9 @@ dependencyResolutionManagement {
 }
 
 // List modules once
-include(
-        "modules:common-graphql",
-        "modules:gateway",
-        "modules:order-service",
-        "modules:inventory-service",
-        "modules:payment-service"
-)
+include("modules:common-graphql")
+include("modules:common-domain")
+include("modules:gateway")
+include("modules:order-service")
+include("modules:inventory-service")
+include("modules:payment-service")

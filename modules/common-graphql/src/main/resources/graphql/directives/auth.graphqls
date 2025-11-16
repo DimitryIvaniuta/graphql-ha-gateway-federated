@@ -1,0 +1,26 @@
+"""
+Requires the current user to be authenticated.
+The enforcement is implemented in resolvers / middleware.
+"""
+directive @auth(
+    """
+    Optional roles required to access this field.
+    If empty, any authenticated user is allowed.
+    """
+    roles: [String!]
+) on
+    FIELD_DEFINITION |
+    OBJECT
+
+"""
+Marks a field or type as tenant-scoped.
+Can be used to drive multi-tenant filters in resolvers.
+"""
+directive @tenantScope(
+    """
+    Name of the tenant identifier (e.g. 'tenantId', 'orgId').
+    """
+    key: String! = "tenantId"
+) on
+    FIELD_DEFINITION |
+    OBJECT

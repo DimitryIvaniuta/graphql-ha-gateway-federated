@@ -4,6 +4,7 @@ plugins {
 }
 
 dependencies {
+    implementation project(":modules:common-domain")
     implementation(platform(libs.spring.boot.bom))
 
     implementation(libs.spring.boot.starter.web)

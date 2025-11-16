@@ -1,5 +1,7 @@
 package com.github.dimitryivaniuta.gateway.test;
 
+import com.github.dimitryivaniuta.gateway.common.money.Money;
+import com.github.dimitryivaniuta.gateway.common.money.MoneyDto;
 import com.github.dimitryivaniuta.gateway.graphql.type.Payment;
 import com.github.dimitryivaniuta.gateway.graphql.type.input.CapturePaymentInput;
 import com.github.dimitryivaniuta.gateway.persistence.service.client.InventoryClient;
@@ -84,17 +86,17 @@ class RestClientContractTest {
         UUID paymentId = UUID.randomUUID();
         UUID orderId = UUID.randomUUID();
         String body = """
-            {
-              "id": "%s",
-              "orderId": "%s",
-              "status": "CAPTURED",
-              "amount": 100.00,
-              "currency": "EUR",
-              "provider": "stripe",
-              "createdAt": "2025-01-01T10:00:00Z",
-              "updatedAt": "2025-01-01T10:00:00Z"
-            }
-            """.formatted(paymentId, orderId);
+                {
+                  "id": "%s",
+                  "orderId": "%s",
+                  "status": "CAPTURED",
+                  "amount": 100.00,
+                  "currency": "EUR",
+                  "provider": "stripe",
+                  "createdAt": "2025-01-01T10:00:00Z",
+                  "updatedAt": "2025-01-01T10:00:00Z"
+                }
+                """.formatted(paymentId, orderId);
 
         mockServer.enqueue(new MockResponse()
                 .setResponseCode(200)
@@ -105,8 +107,12 @@ class RestClientContractTest {
 
         CapturePaymentInput input = new CapturePaymentInput(
                 orderId,
-                BigDecimal.valueOf(100.00),
-                "EUR",
+                MoneyDto.from(
+                        Money.of(
+                                BigDecimal.valueOf(100.00),
+                                "EUR"
+                        )
+                ),
                 "stripe"
         );
 

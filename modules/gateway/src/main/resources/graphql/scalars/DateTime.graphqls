@@ -1,0 +1,6 @@
+"""
+ISO-8601 date-time with offset, e.g. 2025-11-14T10:15:30+00:00.
+
+Backed in Java by `java.time.OffsetDateTime` and handled by a custom scalar.
+"""
+scalar DateTime

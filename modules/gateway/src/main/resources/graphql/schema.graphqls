@@ -21,18 +21,6 @@ type Mutation {
 }
 
 """
-ISO-8601 datetime with offset, e.g. 2025-11-14T10:15:30+00:00
-Backed by java.time.OffsetDateTime and DateTimeScalar.
-"""
-scalar DateTime
-
-"""
-Decimal monetary amount; currency is provided in a separate field.
-Backed by java.math.BigDecimal and MoneyScalar.
-"""
-scalar Money
-
-"""
 High-level order status.
 """
 enum OrderStatus {

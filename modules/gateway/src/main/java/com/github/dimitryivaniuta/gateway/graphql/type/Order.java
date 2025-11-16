@@ -1,6 +1,7 @@
 package com.github.dimitryivaniuta.gateway.graphql.type;
 
-import java.math.BigDecimal;
+import com.github.dimitryivaniuta.gateway.common.money.MoneyDto;
+
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
@@ -15,8 +16,7 @@ public record Order(
         String externalId,
         OrderStatus status,
         UUID customerId,
-        BigDecimal totalAmount,
-        String currency,
+        MoneyDto total,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt
 ) {

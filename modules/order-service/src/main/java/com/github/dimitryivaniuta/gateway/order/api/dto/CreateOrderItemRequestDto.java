@@ -1,15 +1,14 @@
-package com.github.dimitryivaniuta.gateway.graphql.type.input;
+package com.github.dimitryivaniuta.gateway.order.api.dto;
 
 import com.github.dimitryivaniuta.gateway.common.money.MoneyDto;
 
 import java.util.UUID;
 
 /**
- * Java representation of the GraphQL CreateOrderItemInput.
+ * Request DTO for a single order line when creating an order.
  */
-public record CreateOrderItemInput(
+public record CreateOrderItemRequestDto(
         UUID inventoryItemId,
         int quantity,
         MoneyDto total
-) {
-}
+) { }

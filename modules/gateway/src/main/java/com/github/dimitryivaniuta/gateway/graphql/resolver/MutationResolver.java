@@ -75,7 +75,7 @@ public class MutationResolver {
     @MutationMapping
     public Payment capturePayment(@Argument CapturePaymentInput input) {
         log.debug("Capturing payment for orderId={}, amount={}, currency={}",
-                input.orderId(), input.amount(), input.currency());
+                input.orderId(), input.total().amount(), input.total().currency());
 
         return paymentWebClient.post()
                 .uri("/internal/payments/capture")

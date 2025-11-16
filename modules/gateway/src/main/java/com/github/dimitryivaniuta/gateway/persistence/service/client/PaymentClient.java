@@ -141,7 +141,7 @@ public class PaymentClient {
      */
     public Payment capturePayment(CapturePaymentInput input) {
         log.debug("Capturing payment for orderId={}, amount={}, currency={}",
-                input.orderId(), input.amount(), input.currency());
+                input.orderId(), input.total().amount(), input.total().currency());
 
         return paymentWebClient.post()
                 .uri(PAYMENTS_PATH + "/capture")

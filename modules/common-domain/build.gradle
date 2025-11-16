@@ -1,0 +1,20 @@
+plugins {
+    id 'java-library'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+dependencies {
+    // JPA annotations for @Embeddable, @Column, etc.
+//    api 'jakarta.persistence:jakarta.persistence-api:3.2.0'
+
+    compileOnly 'org.projectlombok:lombok:1.18.42'
+    annotationProcessor 'org.projectlombok:lombok:1.18.42'
+
+    compileOnly "jakarta.persistence:jakarta.persistence-api:3.2.0"
+
+}

@@ -1,0 +1,66 @@
+"""
+Federation v2 core directives shared across services.
+Only declare them once in the common-graphql module.
+"""
+directive @link(
+    url: String!,
+    import: [link__Import!]
+) repeatable on SCHEMA
+
+scalar link__Import
+
+"""
+Marks an object type as an entity that can be resolved across subgraphs.
+"""
+directive @key(
+    fields: String!,
+    resolvable: Boolean = true
+) repeatable on OBJECT | INTERFACE
+
+"""
+Specifies required input field set to resolve a value.
+"""
+directive @requires(
+    fields: String!
+) on FIELD_DEFINITION
+
+"""
+Specifies the base field set exported from a type.
+"""
+directive @provides(
+    fields: String!
+) on FIELD_DEFINITION
+
+"""
+Marks a field as external (defined in another subgraph).
+"""
+directive @external on FIELD_DEFINITION | OBJECT
+
+"""
+Marks a field as used only for federation (not visible to clients).
+"""
+directive @inaccessible on
+    FIELD_DEFINITION |
+    OBJECT |
+    INTERFACE |
+    UNION |
+    ENUM |
+    ENUM_VALUE |
+    SCALAR |
+    INPUT_OBJECT |
+    INPUT_FIELD_DEFINITION
+
+"""
+Marks that an enum, object, or field was moved to a new location.
+"""
+directive @tag(name: String!) repeatable on
+    FIELD_DEFINITION |
+    INTERFACE |
+    OBJECT |
+    UNION |
+    ARGUMENT_DEFINITION |
+    SCALAR |
+    ENUM |
+    ENUM_VALUE |
+    INPUT_OBJECT |
+    INPUT_FIELD_DEFINITION

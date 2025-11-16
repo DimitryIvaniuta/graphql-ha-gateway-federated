@@ -4,11 +4,14 @@ plugins {
 }
 
 dependencies {
+    implementation project(":modules:common-domain")
+    implementation project(":modules:common-graphql")
     implementation(platform(libs.spring.boot.bom))
 
     implementation(libs.spring.boot.starter.web)
     implementation(libs.spring.boot.starter.actuator)
     implementation(libs.spring.boot.starter.data.jpa)
+    implementation(libs.spring.boot.starter.security)
 
     implementation(libs.flyway.core)
     implementation(libs.flyway.pg)

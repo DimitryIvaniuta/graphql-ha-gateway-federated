@@ -1,0 +1,26 @@
+"""
+Cross-cutting API conventions shared by all GraphQL services.
+"""
+# Marks a field or type as internal-only (not part of public contract).
+directive @internal on
+    FIELD_DEFINITION |
+    OBJECT |
+    INTERFACE |
+    UNION |
+    ENUM |
+    ENUM_VALUE |
+    INPUT_OBJECT |
+    INPUT_FIELD_DEFINITION
+
+"""
+Marks a field or type as experimental and subject to breaking changes.
+"""
+directive @experimental on
+    FIELD_DEFINITION |
+    OBJECT |
+    INTERFACE |
+    UNION |
+    ENUM |
+    ENUM_VALUE |
+    INPUT_OBJECT |
+    INPUT_FIELD_DEFINITION
