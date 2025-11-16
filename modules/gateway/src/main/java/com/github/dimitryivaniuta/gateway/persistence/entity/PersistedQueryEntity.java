@@ -20,11 +20,7 @@ import java.time.OffsetDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class PersistedQueryEntity {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+public class PersistedQueryEntity extends AbstractUuidEntity {
 
     /**
      * External identifier for the query (e.g. hash or client-supplied ID).
@@ -32,8 +28,7 @@ public class PersistedQueryEntity {
     @Column(name = "query_id", nullable = false, unique = true, length = 128)
     private String queryId;
 
-    @Lob
-    @Column(name = "document", nullable = false)
+    @Column(name = "document", nullable = false, columnDefinition = "text")
     private String document;
 
     @Column(name = "operation_name", length = 128)

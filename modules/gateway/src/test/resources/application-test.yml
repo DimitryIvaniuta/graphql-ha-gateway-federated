@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: gateway-test
+
+  datasource:
+    url: jdbc:postgresql://localhost:5450/gateway_test   # overridden by Testcontainers
+    username: test
+    password: test
+    hikari:
+      maximum-pool-size: 4
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate.jdbc.time_zone: UTC
+      hibernate.default_schema: gateway
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    schemas: gateway
+    create-schemas: true
+    baseline-on-migrate: true
+
+  graphql:
+    http:
+      path: /graphql
+
+server:
+  port: 0
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
