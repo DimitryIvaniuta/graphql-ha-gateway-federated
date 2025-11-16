@@ -1,5 +1,6 @@
 package com.github.dimitryivaniuta.gateway.persistence.entity;
 
+import com.github.dimitryivaniuta.gateway.common.persistence.AbstractUuidEntity;
 import jakarta.persistence.*;
 import lombok.*;
 

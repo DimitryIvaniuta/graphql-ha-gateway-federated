@@ -2,8 +2,8 @@ package com.github.dimitryivaniuta.gateway.web.auth;
 
 import com.github.dimitryivaniuta.gateway.config.properties.SecurityProperties;
 import com.github.dimitryivaniuta.gateway.persistence.entity.UserEntity;
-import com.github.dimitryivaniuta.gateway.persistence.service.JwtService;
-import com.github.dimitryivaniuta.gateway.persistence.service.UserService;
+import com.github.dimitryivaniuta.gateway.service.JwtService;
+import com.github.dimitryivaniuta.gateway.service.UserService;
 import com.github.dimitryivaniuta.gateway.web.auth.dto.CurrentUserResponse;
 import com.github.dimitryivaniuta.gateway.web.auth.dto.LoginRequest;
 import com.github.dimitryivaniuta.gateway.web.auth.dto.TokenResponse;

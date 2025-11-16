@@ -1,4 +1,4 @@
-package com.github.dimitryivaniuta.gateway.persistence.service.client;
+package com.github.dimitryivaniuta.gateway.service.client;
 
 import com.github.dimitryivaniuta.gateway.graphql.type.InventoryItem;
 import com.github.dimitryivaniuta.gateway.graphql.type.input.UpdateInventoryItemInput;

@@ -1,6 +1,6 @@
 package com.github.dimitryivaniuta.gateway.graphql.interceptor;
 
-import com.github.dimitryivaniuta.gateway.persistence.service.PersistedQueryService;
+import com.github.dimitryivaniuta.gateway.service.PersistedQueryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;

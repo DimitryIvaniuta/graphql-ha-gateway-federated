@@ -1,4 +1,4 @@
-package com.github.dimitryivaniuta.gateway.persistence.entity;
+package com.github.dimitryivaniuta.gateway.common.persistence;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.GeneratedValue;

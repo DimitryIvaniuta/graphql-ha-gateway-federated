@@ -1,4 +1,4 @@
-package com.github.dimitryivaniuta.gateway.persistence.service;
+package com.github.dimitryivaniuta.gateway.service;
 
 import com.github.dimitryivaniuta.gateway.persistence.entity.PersistedQueryEntity;
 import com.github.dimitryivaniuta.gateway.persistence.repository.PersistedQueryRepository;

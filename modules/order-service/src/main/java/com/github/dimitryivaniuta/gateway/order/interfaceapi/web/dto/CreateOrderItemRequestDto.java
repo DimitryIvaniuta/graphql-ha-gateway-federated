@@ -1,4 +1,4 @@
-package com.github.dimitryivaniuta.gateway.order.api.dto;
+package com.github.dimitryivaniuta.gateway.order.interfaceapi.web.dto;
 
 import com.github.dimitryivaniuta.gateway.common.money.MoneyDto;
 

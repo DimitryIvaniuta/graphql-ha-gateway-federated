@@ -2,7 +2,7 @@ package com.github.dimitryivaniuta.gateway.auth;
 
 import com.github.dimitryivaniuta.gateway.config.properties.SecurityProperties;
 import com.github.dimitryivaniuta.gateway.persistence.entity.ApiKeyEntity;
-import com.github.dimitryivaniuta.gateway.persistence.service.ApiKeyService;
+import com.github.dimitryivaniuta.gateway.service.ApiKeyService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

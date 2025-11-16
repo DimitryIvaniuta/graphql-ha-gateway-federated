@@ -1,6 +1,6 @@
 package com.github.dimitryivaniuta.gateway.auth;
 
-import com.github.dimitryivaniuta.gateway.persistence.service.JwtService;
+import com.github.dimitryivaniuta.gateway.service.JwtService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
