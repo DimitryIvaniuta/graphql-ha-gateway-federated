@@ -39,12 +39,31 @@ public class Money {
         // for JPA
     }
 
+    /**
+     * Factory method.
+     *
+     * <ul>
+     *   <li>{@code amount} must not be null</li>
+     *   <li>{@code currencyCode} must not be null</li>
+     *   <li>{@code currencyCode} must be a valid ISO-4217 code (e.g. "EUR")</li>
+     *   <li>Amount is normalized to scale 2 using HALF_UP</li>
+     * </ul>
+     */
     public static Money of(BigDecimal amount, String currencyCode) {
         Objects.requireNonNull(amount, "amount must not be null");
         Objects.requireNonNull(currencyCode, "currencyCode must not be null");
-        Currency currency = Currency.getInstance(currencyCode);
-        int scale = Math.max(currency.getDefaultFractionDigits(), 2);
-        return new Money(amount.setScale(scale, RoundingMode.HALF_UP), currency.getCurrencyCode());
+
+        if (amount.signum() == 0 || amount.signum() < 0) {
+            throw new IllegalArgumentException("amount must be positive");
+        }
+
+        String normalizedCode = currencyCode.trim().toUpperCase();
+        // Will throw IllegalArgumentException if code is invalid (e.g. "XYZ")
+        Currency.getInstance(normalizedCode);
+
+        BigDecimal normalizedAmount = amount.setScale(2, RoundingMode.HALF_UP);
+
+        return new Money(normalizedAmount, normalizedCode);
     }
 
     public static Money ofMinorUnits(long minorUnits, String currencyCode) {
@@ -54,9 +73,17 @@ public class Money {
         return new Money(major, currency.getCurrencyCode());
     }
 
+    /**
+     * Adds another Money with the same currency.
+     *
+     * @throws IllegalArgumentException if currencies differ.
+     */
     public Money add(Money other) {
-        assertSameCurrency(other);
-        return new Money(this.amount.add(other.amount), this.currencyCode);
+        Objects.requireNonNull(other, "other must not be null");
+        if (!this.currencyCode.equals(other.currencyCode)) {
+            throw new IllegalArgumentException("Currency mismatch: " + this.currencyCode + " vs " + other.currencyCode);
+        }
+        return Money.of(this.amount.add(other.amount), this.currencyCode);
     }
 
     public Money subtract(Money other) {
