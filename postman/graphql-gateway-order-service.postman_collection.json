@@ -1,0 +1,292 @@
+{
+  "info": {
+    "name": "GraphQL Gateway & Order-Service",
+    "_postman_id": "12659a92-d98e-4051-bd86-57bc868926ef",
+    "description": "Collection to test GraphQL gateway and order-service with JWT propagation.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Gateway - Auth",
+      "item": [
+        {
+          "name": "Login - Get Access Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{GATEWAY_URL}}/api/auth/login",
+              "host": [
+                "{{GATEWAY_URL}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin@example.com\",\n  \"password\": \"admin123\"\n}"
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Gateway - GraphQL",
+      "item": [
+        {
+          "name": "Create Order (GraphQL)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ACCESS_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{GATEWAY_URL}}/graphql",
+              "host": [
+                "{{GATEWAY_URL}}"
+              ],
+              "path": [
+                "graphql"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"mutation CreateOrder($input: CreateOrderInput!) { createOrder(input: $input) { id status total { amount currency } createdAt } }\",\n  \"variables\": {\n    \"input\": {\n      \"customerId\": \"00000000-0000-0000-0000-000000000001\",\n      \"externalId\": \"EXT-123\",\n      \"items\": [\n        { \"sku\": \"SKU-1\", \"quantity\": 2, \"price\": { \"amount\": 10.00, \"currency\": \"USD\" } },\n        { \"sku\": \"SKU-2\", \"quantity\": 1, \"price\": { \"amount\": 10.00, \"currency\": \"USD\" } }\n      ]\n    }\n  }\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Orders By Ids (GraphQL)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ACCESS_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{GATEWAY_URL}}/graphql",
+              "host": [
+                "{{GATEWAY_URL}}"
+              ],
+              "path": [
+                "graphql"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"query OrdersByIds($ids: [ID!]!) { ordersByIds(ids: $ids) { id status total { amount currency } } }\",\n  \"variables\": {\n    \"ids\": [\n      \"11111111-1111-1111-1111-111111111111\",\n      \"22222222-2222-2222-2222-222222222222\"\n    ]\n  }\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Orders Page (GraphQL)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ACCESS_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{GATEWAY_URL}}/graphql",
+              "host": [
+                "{{GATEWAY_URL}}"
+              ],
+              "path": [
+                "graphql"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"query OrdersPage($page:Int!, $size:Int!) { ordersPage(page:$page, size:$size) { content { id status total { amount currency } } page size totalElements } }\",\n  \"variables\": {\n    \"page\": 0,\n    \"size\": 10\n  }\n}"
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Order-service - Internal",
+      "item": [
+        {
+          "name": "Get Orders by Ids",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ACCESS_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{ORDER_URL}}/internal/orders?ids=11111111-1111-1111-1111-111111111111,22222222-2222-2222-2222-222222222222",
+              "host": [
+                "{{ORDER_URL}}"
+              ],
+              "path": [
+                "internal",
+                "orders"
+              ],
+              "query": [
+                {
+                  "key": "ids",
+                  "value": "11111111-1111-1111-1111-111111111111,22222222-2222-2222-2222-222222222222"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Order (REST)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ACCESS_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{ORDER_URL}}/internal/orders",
+              "host": [
+                "{{ORDER_URL}}"
+              ],
+              "path": [
+                "internal",
+                "orders"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"00000000-0000-0000-0000-000000000001\",\n  \"externalId\": \"EXT-123\",\n  \"items\": [\n    { \"sku\": \"SKU-1\", \"quantity\": 2, \"price\": { \"amount\": 10.00, \"currency\": \"USD\" } },\n    { \"sku\": \"SKU-2\", \"quantity\": 1, \"price\": { \"amount\": 10.00, \"currency\": \"USD\" } }\n  ]\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Change Order Status (REST)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ACCESS_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{ORDER_URL}}/internal/orders/{{ORDER_ID}}/status",
+              "host": [
+                "{{ORDER_URL}}"
+              ],
+              "path": [
+                "internal",
+                "orders",
+                "{{ORDER_ID}}",
+                "status"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"status\": \"CONFIRMED\" }"
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Order-service - Public",
+      "item": [
+        {
+          "name": "Orders Page (REST)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ACCESS_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{ORDER_URL}}/api/orders?page=0&size=10",
+              "host": [
+                "{{ORDER_URL}}"
+              ],
+              "path": [
+                "api",
+                "orders"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "GATEWAY_URL",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "ORDER_URL",
+      "value": "http://localhost:8081"
+    },
+    {
+      "key": "ACCESS_TOKEN",
+      "value": ""
+    },
+    {
+      "key": "ORDER_ID",
+      "value": "11111111-1111-1111-1111-111111111111"
+    }
+  ]
+}

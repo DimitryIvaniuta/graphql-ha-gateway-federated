@@ -3,19 +3,21 @@ package com.github.dimitryivaniuta.gateway.config;
 //import io.netty.channel.ChannelOption;
 //import io.netty.handler.timeout.ReadTimeoutHandler;
 //import io.netty.handler.timeout.WriteTimeoutHandler;
+import com.github.dimitryivaniuta.gateway.config.properties.OrderServiceProperties;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.reactive.ClientHttpConnector;
-import org.springframework.http.client.reactive.ReactorClientHttpConnector;
+
 import org.springframework.util.unit.DataSize;
 import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
-//import reactor.netty.http.client.HttpClient;
 
-import java.time.Duration;
-import java.util.concurrent.TimeUnit;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.web.reactive.function.client.*;
 
 /**
  * Central configuration for reactive {@link WebClient} instances used by the gateway
@@ -137,4 +139,35 @@ public class WebClientConfig {
          */
         public record Service(String baseUrl) { }
     }
+
+
+    @Bean
+    public ExchangeFilterFunction jwtPropagationFilter() {
+        return (request, next) -> {
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+
+            if (auth instanceof JwtAuthenticationToken jwtAuth) {
+                String tokenValue = jwtAuth.getToken().getTokenValue();
+
+                ClientRequest mutated = ClientRequest.from(request)
+                        .headers(headers -> headers.setBearerAuth(tokenValue))
+                        .build();
+
+                return next.exchange(mutated);
+            }
+
+            return next.exchange(request);
+        };
+    }
+
+    @Bean
+    public WebClient orderServiceWebClient(WebClient.Builder builder,
+                                           ExchangeFilterFunction jwtPropagationFilter,
+                                           OrderServiceProperties orderServiceProperties) {
+        return builder
+                .baseUrl(orderServiceProperties.baseUrl())
+                .filter(jwtPropagationFilter)
+                .build();
+    }
+
 }

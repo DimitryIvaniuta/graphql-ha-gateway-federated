@@ -10,10 +10,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -79,33 +76,47 @@ public class JwtService {
         Instant now = Instant.now();
         Instant expiresAt = now.plusSeconds(securityProperties.jwt().ttlSeconds());
 
-        List<String> roleList = Arrays.stream(user.getRoles().split(","))
+        // Derive scopes from roles
+        List<String> roles = Arrays.stream(user.getRoles().split(","))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
                 .toList();
 
-        String scopeClaim = roleList.stream()
-                .map(role -> role.startsWith("ROLE_") ? role.substring("ROLE_".length()) : role)
-                .collect(Collectors.joining(" "));
+        // Use a set to avoid duplicates and preserve order
+        Set<String> scopes = new LinkedHashSet<>();
+
+        // Map ROLE_* to simple scopes (ADMIN, USER, etc.)
+        for (String role : roles) {
+            String simple = role.startsWith("ROLE_")
+                    ? role.substring("ROLE_".length())
+                    : role;
+            scopes.add(simple);
+        }
+
+        // Technical scope for internal service-to-service calls
+        scopes.add("orders.internal");
+
+        String scopeClaim = String.join(" ", scopes);
 
         JwtClaimsSet claims = JwtClaimsSet.builder()
-                .issuer(securityProperties.jwt().issuer())
+                .issuer(securityProperties.jwt().issuer())   // e.g. http://localhost:8080
                 .issuedAt(now)
                 .expiresAt(expiresAt)
                 .subject(user.getUsername())
                 .claim("tenant", user.getTenantId())
-                .claim("scope", scopeClaim)
+                .claim("scope", scopeClaim)                  // validated in order-service
                 .build();
 
         JwsHeader jwsHeader = JwsHeader.with(() -> "HS256").build();
         JwtEncoderParameters params = JwtEncoderParameters.from(jwsHeader, claims);
 
         Jwt jwt = jwtEncoder.encode(params);
-        log.debug("Issued JWT for tenant='{}', username='{}', expiresAt={}",
-                user.getTenantId(), user.getUsername(), expiresAt);
+        log.debug("Issued JWT for tenant='{}', username='{}', scopes='{}', expiresAt={}",
+                user.getTenantId(), user.getUsername(), scopeClaim, expiresAt);
 
         return jwt.getTokenValue();
     }
+
 
     /**
      * Extract Spring Security authorities from common JWT scope/role claims.

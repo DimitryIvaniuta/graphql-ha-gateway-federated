@@ -20,7 +20,12 @@ spring:
     schemas: orders
     create-schemas: true
     baseline-on-migrate: true
-
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: https://your-issuer.example.com/   # or
+          # jwk-set-uri: https://your-issuer.example.com/.well-known/jwks.json
 management:
   endpoints:
     web:
