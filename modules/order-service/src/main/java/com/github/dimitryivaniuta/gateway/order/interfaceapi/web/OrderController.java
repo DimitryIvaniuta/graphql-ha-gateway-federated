@@ -1,31 +1,46 @@
 package com.github.dimitryivaniuta.gateway.order.interfaceapi.web;
 
-import com.github.dimitryivaniuta.gateway.order.application.ChangeOrderStatusCommand;
-import com.github.dimitryivaniuta.gateway.order.application.CreateOrderCommand;
+import com.github.dimitryivaniuta.gateway.common.money.Money;
+import com.github.dimitryivaniuta.gateway.common.money.MoneyDto;
 import com.github.dimitryivaniuta.gateway.order.application.OrderApplicationService;
+import com.github.dimitryivaniuta.gateway.order.application.command.ChangeOrderStatusCommand;
+import com.github.dimitryivaniuta.gateway.order.application.command.CreateOrderCommand;
+import com.github.dimitryivaniuta.gateway.order.application.command.CreateOrderItemCommand;
 import com.github.dimitryivaniuta.gateway.order.domain.Order;
-import com.github.dimitryivaniuta.gateway.order.interfaceapi.web.dto.ChangeOrderStatusRequestDto;
-import com.github.dimitryivaniuta.gateway.order.interfaceapi.web.dto.CreateOrderRequestDto;
-import com.github.dimitryivaniuta.gateway.order.interfaceapi.web.dto.OrderResponseDto;
+import com.github.dimitryivaniuta.gateway.order.interfaceapi.web.dto.*;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * Internal REST API for order-service, consumed by the GraphQL gateway.
+ * HTTP API for order-service.
+ * <p>
+ * Exposes:
+ * - GET  /internal/orders?ids=...        (for GraphQL gateway)
+ * - POST /internal/orders                (create order)
+ * - PATCH /internal/orders/{id}/status   (change status)
+ * - GET  /api/orders?page=&size=         (paged listing for backoffice/UI)
  */
 @RestController
-@RequestMapping("/internal/orders")
 @RequiredArgsConstructor
 public class OrderController {
 
     private final OrderApplicationService orderService;
 
-    @GetMapping
+    // -------------------------------------------------------------------------
+    // Internal API for gateway
+    // -------------------------------------------------------------------------
+
+    @GetMapping(path = "/internal/orders", params = "ids")
     public List<OrderResponseDto> getByIds(@RequestParam("ids") String idsParam) {
         List<UUID> ids = Arrays.stream(idsParam.split(","))
                 .map(String::trim)
@@ -34,46 +49,99 @@ public class OrderController {
                 .toList();
 
         List<Order> orders = orderService.getOrders(ids);
+
         Map<UUID, Order> byId = orders.stream()
                 .collect(Collectors.toMap(o -> o.id().value(), o -> o));
 
         return ids.stream()
                 .map(byId::get)
                 .filter(Objects::nonNull)
-                .map(this::toDto)
+                .map(this::toResponseDto)
                 .toList();
     }
 
-    @PostMapping
-    public ResponseEntity<OrderResponseDto> create(@Valid @RequestBody CreateOrderRequestDto body) {
-        CreateOrderCommand cmd = new CreateOrderCommand(
-                body.customerId(),
-                body.totalAmount(),
-                body.currency(),
-                body.externalId()
-        );
+    @PostMapping("/internal/orders")
+    public ResponseEntity<OrderResponseDto> createInternal(@Valid @RequestBody CreateOrderRequestDto body) {
+        CreateOrderCommand cmd = toCreateCommand(body);
         Order order = orderService.createOrder(cmd);
-        return ResponseEntity.ok(toDto(order));
+        return ResponseEntity.ok(toResponseDto(order));
     }
 
-    @PatchMapping("/{id}/status")
-    public ResponseEntity<OrderResponseDto> changeStatus(@PathVariable("id") UUID id,
-                                                         @Valid @RequestBody ChangeOrderStatusRequestDto body) {
+    @PatchMapping("/internal/orders/{id}/status")
+    public ResponseEntity<OrderResponseDto> changeStatusInternal(@PathVariable("id") UUID id,
+                                                                 @Valid @RequestBody ChangeOrderStatusRequestDto body) {
         ChangeOrderStatusCommand cmd = new ChangeOrderStatusCommand(id, body.status());
-        Order updated = orderService.changeStatus(cmd);
-        return ResponseEntity.ok(toDto(updated));
+        Order order = orderService.changeStatus(cmd);
+        return ResponseEntity.ok(toResponseDto(order));
     }
 
-    private OrderResponseDto toDto(Order order) {
+    // -------------------------------------------------------------------------
+    // Public API with paging (for UI/backoffice)
+    // -------------------------------------------------------------------------
+
+    @GetMapping(path = "/api/orders", params = {"page", "size"})
+    public OrderPageResponseDto findPage(@RequestParam("page") int page,
+                                         @RequestParam("size") int size) {
+        Page<Order> resultPage = orderService.findPage(page, size);
+
+        List<OrderResponseDto> content = resultPage.getContent().stream()
+                .map(this::toResponseDto)
+                .toList();
+
+        return new OrderPageResponseDto(
+                content,
+                resultPage.getNumber(),
+                resultPage.getSize(),
+                resultPage.getTotalElements()
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // Mapping
+    // -------------------------------------------------------------------------
+
+    private CreateOrderCommand toCreateCommand(CreateOrderRequestDto dto) {
+        List<CreateOrderItemCommand> items = dto.items().stream()
+                .map(this::toCreateItemCommand)
+                .toList();
+
+        return new CreateOrderCommand(
+                dto.customerId(),
+                dto.externalId(),
+                items
+        );
+    }
+
+    private CreateOrderItemCommand toCreateItemCommand(CreateOrderItemRequestDto dto) {
+        Money price = toMoney(dto.price());
+        return new CreateOrderItemCommand(
+                dto.sku(),
+                dto.quantity(),
+                price
+        );
+    }
+
+    private OrderResponseDto toResponseDto(Order order) {
+        MoneyDto totalDto = toMoneyDto(order.total());
         return new OrderResponseDto(
-                order.id() != null ? order.id().value() : null,
+                order.id().value(),
                 order.externalId(),
                 order.customerId(),
                 order.status(),
-                order.total().amount(),
-                order.total().currency(),
+                totalDto,
                 order.createdAt(),
                 order.updatedAt()
         );
+    }
+
+    private Money toMoney(MoneyDto dto) {
+        if (dto == null) {
+            return Money.of(java.math.BigDecimal.ZERO, "USD");
+        }
+        return Money.of(dto.amount(), dto.currency());
+    }
+
+    private MoneyDto toMoneyDto(Money money) {
+        return new MoneyDto(money.getAmount(), money.getCurrencyCode());
     }
 }

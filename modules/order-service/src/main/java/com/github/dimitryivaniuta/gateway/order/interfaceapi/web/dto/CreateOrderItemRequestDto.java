@@ -1,14 +1,16 @@
 package com.github.dimitryivaniuta.gateway.order.interfaceapi.web.dto;
 
 import com.github.dimitryivaniuta.gateway.common.money.MoneyDto;
-
-import java.util.UUID;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 
 /**
- * Request DTO for a single order line when creating an order.
+ * Single order line in create-order request.
  */
 public record CreateOrderItemRequestDto(
-        UUID inventoryItemId,
-        int quantity,
-        MoneyDto total
-) { }
+        @NotBlank String sku,
+        @Min(1) int quantity,
+        @NotNull MoneyDto price
+) {
+}

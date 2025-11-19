@@ -1,4 +1,10 @@
 package com.github.dimitryivaniuta.gateway.order.interfaceapi.web.dto;
 
-public class OrderRequestDto {
+/**
+ * Placeholder for filter parameters for order searches.
+ */
+public record OrderRequestDto(
+        String status,
+        String customerExternalId
+) {
 }

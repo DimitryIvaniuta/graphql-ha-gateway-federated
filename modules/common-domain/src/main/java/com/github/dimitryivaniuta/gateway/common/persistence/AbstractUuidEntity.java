@@ -5,9 +5,8 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.MappedSuperclass;
 import jakarta.persistence.Version;
-import lombok.Getter;
-import lombok.Setter;
-import lombok.ToString;
+import lombok.*;
+import lombok.experimental.SuperBuilder;
 
 import java.util.UUID;
 
@@ -27,7 +26,10 @@ import java.util.UUID;
 @MappedSuperclass
 @Getter
 @Setter
-@ToString
+@SuperBuilder
+@ToString(exclude = "version")
+@NoArgsConstructor
+@AllArgsConstructor
 public abstract class AbstractUuidEntity {
 
     /**

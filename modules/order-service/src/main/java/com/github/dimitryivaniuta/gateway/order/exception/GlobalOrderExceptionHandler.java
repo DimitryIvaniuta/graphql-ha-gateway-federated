@@ -22,7 +22,8 @@ public class GlobalOrderExceptionHandler {
             String error,
             String message,
             String path
-    ) { }
+    ) {
+    }
 
     @ExceptionHandler(OrderNotFoundException.class)
     public ResponseEntity<ApiError> handleNotFound(OrderNotFoundException ex, HttpServletRequest request) {

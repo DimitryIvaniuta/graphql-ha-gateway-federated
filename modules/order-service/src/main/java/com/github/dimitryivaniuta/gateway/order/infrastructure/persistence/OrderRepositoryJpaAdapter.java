@@ -14,6 +14,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Repository
 @RequiredArgsConstructor
@@ -24,17 +25,27 @@ public class OrderRepositoryJpaAdapter implements OrderRepository {
     @Override
     @Transactional(readOnly = true)
     public Optional<Order> findById(OrderId id) {
-        UUID uuid = OrderEntityMapper.toUuid(id);
-        return delegate.findById(uuid).map(OrderEntityMapper::toDomain);
+        if (id == null) {
+            return Optional.empty();
+        }
+        return delegate.findById(id.value())
+                .map(OrderEntityMapper::toDomain);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<Order> findByIds(Collection<OrderId> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+
         List<UUID> uuids = ids.stream()
-                .map(OrderEntityMapper::toUuid)
-                .toList();
-        return delegate.findByIdIn(uuids).stream()
+                .map(OrderId::value)
+                .collect(Collectors.toList());
+
+        List<OrderJpaEntity> entities = delegate.findByIdIn(uuids);
+
+        return entities.stream()
                 .map(OrderEntityMapper::toDomain)
                 .toList();
     }

@@ -1,15 +1,17 @@
 package com.github.dimitryivaniuta.gateway.order.interfaceapi.web.dto;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
 
-import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
+/**
+ * Request body for creating an order.
+ */
 public record CreateOrderRequestDto(
         UUID customerId,
-        @NotNull @PositiveOrZero BigDecimal totalAmount,
-        @NotBlank String currency,
-        String externalId
-) { }
+        String externalId,
+        @NotEmpty @Valid List<CreateOrderItemRequestDto> items
+) {
+}

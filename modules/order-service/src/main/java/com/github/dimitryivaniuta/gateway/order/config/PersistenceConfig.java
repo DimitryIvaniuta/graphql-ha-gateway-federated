@@ -14,11 +14,11 @@ import java.util.Optional;
 
 /**
  * Persistence configuration for the order-service.
- *
+ * <p>
  * - Enables JPA auditing so entities with @CreatedBy/@LastModifiedBy
- *   can be filled from the authenticated principal (SSO/JWT subject).
+ * can be filled from the authenticated principal (SSO/JWT subject).
  * - Forces Hibernate default schema to "order" so it uses the correct
- *   schema in the shared PostgreSQL instance.
+ * schema in the shared PostgreSQL instance.
  */
 @Configuration
 @EnableTransactionManagement

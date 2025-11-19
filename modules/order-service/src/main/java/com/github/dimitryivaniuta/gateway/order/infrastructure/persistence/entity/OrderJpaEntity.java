@@ -2,10 +2,20 @@ package com.github.dimitryivaniuta.gateway.order.infrastructure.persistence.enti
 
 import com.github.dimitryivaniuta.gateway.common.persistence.AbstractUuidEntity;
 import com.github.dimitryivaniuta.gateway.order.domain.OrderStatus;
-import jakarta.persistence.*;
+import jakarta.persistence.AttributeOverride;
+import jakarta.persistence.AttributeOverrides;
+import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Index;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
 import lombok.*;
+import lombok.experimental.SuperBuilder;
 
-import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
@@ -25,8 +35,8 @@ import java.util.UUID;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
-@ToString
+@SuperBuilder
+@ToString(callSuper = true)
 public class OrderJpaEntity extends AbstractUuidEntity {
 
     @Column(name = "external_id", length = 64)
@@ -39,11 +49,18 @@ public class OrderJpaEntity extends AbstractUuidEntity {
     @Column(name = "status", length = 32, nullable = false)
     private OrderStatus status;
 
-    @Column(name = "total_amount", precision = 19, scale = 4, nullable = false)
-    private BigDecimal totalAmount;
-
-    @Column(name = "currency", length = 3, nullable = false)
-    private String currency;
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(
+                    name = "amount",
+                    column = @Column(name = "total_amount", precision = 19, scale = 4, nullable = false)
+            ),
+            @AttributeOverride(
+                    name = "currency",
+                    column = @Column(name = "currency", length = 3, nullable = false)
+            )
+    })
+    private MoneyEmbeddable total;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
@@ -54,7 +71,9 @@ public class OrderJpaEntity extends AbstractUuidEntity {
     @PrePersist
     void onPrePersist() {
         OffsetDateTime now = OffsetDateTime.now();
-        this.createdAt = now;
+        if (createdAt == null) {
+            createdAt = now;
+        }
         this.updatedAt = now;
         if (this.status == null) {
             this.status = OrderStatus.CREATED;
