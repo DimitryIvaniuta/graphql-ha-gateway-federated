@@ -23,9 +23,7 @@ spring:
   security:
     oauth2:
       resourceserver:
-        jwt:
-          issuer-uri: https://your-issuer.example.com/   # or
-          # jwk-set-uri: https://your-issuer.example.com/.well-known/jwks.json
+        jwt: { }
 management:
   endpoints:
     web:
@@ -38,3 +36,8 @@ management:
 
 server:
   port: ${PORT:8081}
+
+security:
+  jwt:
+    issuer: ${JWT_ISSUER:http://localhost:8080}   # MUST match gateway
+    secret: ${JWT_SECRET:change-me-at-least-32-chars-long-secret}

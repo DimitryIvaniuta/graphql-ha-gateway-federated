@@ -117,7 +117,6 @@ public class JwtService {
         return jwt.getTokenValue();
     }
 
-
     /**
      * Extract Spring Security authorities from common JWT scope/role claims.
      *

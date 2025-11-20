@@ -30,8 +30,7 @@ Input for a single line item when creating an order.
 input CreateOrderItemInput {
     inventoryItemId: ID!
     quantity: Int!
-    unitPrice: Money!
-    currency: String!
+    total: MoneyInput!
 }
 
 """
@@ -41,8 +40,7 @@ input CreateOrderInput {
     clientMutationId: String
     customerId: ID
     items: [CreateOrderItemInput!]!
-    totalAmount: Money
-    currency: String
+    totalAmount: MoneyInput
 }
 
 extend type Query {

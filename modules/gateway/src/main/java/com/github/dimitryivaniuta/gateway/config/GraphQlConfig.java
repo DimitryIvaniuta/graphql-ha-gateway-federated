@@ -4,6 +4,7 @@ import com.github.dimitryivaniuta.gateway.util.DateTimeScalar;
 import com.github.dimitryivaniuta.gateway.util.MoneyScalar;
 import graphql.GraphQLError;
 import graphql.GraphqlErrorBuilder;
+import graphql.scalars.ExtendedScalars;
 import graphql.schema.DataFetchingEnvironment;
 import lombok.extern.slf4j.Slf4j;
 import org.dataloader.DataLoaderRegistry;
@@ -49,7 +50,8 @@ public class GraphQlConfig {
         return wiringBuilder -> wiringBuilder
                 // Custom scalars used by the shared SDL (common-graphql module)
                 .scalar(DateTimeScalar.INSTANCE)
-                .scalar(MoneyScalar.INSTANCE);
+                .scalar(MoneyScalar.INSTANCE)
+                .scalar(ExtendedScalars.GraphQLBigDecimal);
         // Example hooks for the future:
         // .directive("auth", new AuthDirectiveWiring())
         // .type("Query", typeWiring -> typeWiring.dataFetcher("health", env -> "OK"));

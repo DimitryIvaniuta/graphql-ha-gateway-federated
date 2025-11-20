@@ -8,11 +8,15 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.jwt.*;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -45,6 +49,21 @@ public class OrderServiceSecurityConfig {
 
         return http.build();
     }
+
+    @Bean
+    public JwtDecoder jwtDecoder(JwtResourceServerProperties props) {
+        var keyBytes = props.secret().getBytes(StandardCharsets.UTF_8);
+        var key = new SecretKeySpec(keyBytes, "HmacSHA256");
+
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(key).build();
+
+        OAuth2TokenValidator<Jwt> withIssuer = new JwtIssuerValidator(props.issuer());
+        OAuth2TokenValidator<Jwt> withDefaults = JwtValidators.createDefault();
+        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(withDefaults, withIssuer));
+
+        return decoder;
+    }
+
 
     /**
      * Map JWT "scope" or "scp"/"scopes" claims to Spring authorities "SCOPE_xxx".

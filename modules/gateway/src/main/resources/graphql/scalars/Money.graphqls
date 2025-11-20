@@ -4,4 +4,11 @@ Currency is provided separately in an adjacent field.
 
 Backed in Java by `java.math.BigDecimal` and handled by a custom scalar.
 """
+scalar BigDecimal
+
 scalar Money
+
+input MoneyInput {
+    amount: BigDecimal!
+    currency: String!
+}

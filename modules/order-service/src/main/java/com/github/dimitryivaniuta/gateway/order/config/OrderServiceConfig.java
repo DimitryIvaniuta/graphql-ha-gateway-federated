@@ -4,6 +4,7 @@ package com.github.dimitryivaniuta.gateway.order.config;
 import com.github.dimitryivaniuta.gateway.order.infrastructure.persistence.entity.OrderJpaEntity;
 import com.github.dimitryivaniuta.gateway.order.infrastructure.persistence.repository.SpringDataOrderJpaRepository;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
@@ -20,6 +21,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @EntityScan(
         basePackageClasses = OrderJpaEntity.class
 )
+@EnableConfigurationProperties(JwtResourceServerProperties.class)
 public class OrderServiceConfig {
     // no extra beans needed for now
 }
